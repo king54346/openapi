@@ -100,7 +100,7 @@ func (a *Adaptor) ConvertEmbeddingRequest(c gin.Context, info *relaycommon.Relay
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
-	return nil, errors.New("not implemented")
+	return nil, channel.ErrNotImplemented
 }
 
 func (a *Adaptor) DoRequest(c gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {

@@ -121,15 +121,12 @@ func SetRelayRouter(router *gin.Engine) {
 	// ==================== OpenAI 主要 API 路由 ====================
 	// 路径前缀: /v1
 	// 支持 OpenAI、Claude、Gemini 等多种服务商的 API 请求转发
-	// ==================== Web Search 统一接口路由 ====================
-	// 路径: /v1/search
-	// 与 LLM relay 解耦：仅做 Token 认证，不经过渠道分发（Distribute，依赖模型）。
-	// 内部按分组对 Search 渠道（Exa / Serper / SerpAPI / Brave / Tavily）做负载均衡与配额控制。
+	// ==================== 不经过渠道分发的只读接口 ====================
+	// 仅做 Token 认证，不经过渠道分发（Distribute，依赖模型）。
 	searchRouter := router.Group("/v1")
 	searchRouter.Use(middleware.SystemPerformanceCheck()) // 系统性能检查
 	searchRouter.Use(middleware.TokenAuth())              // Token 认证
 	{
-		searchRouter.POST("/search", controller.WebSearch)
 		// ==================== Skill 市场对外只读接口 ====================
 		// GET /v1/skills - 技能列表（Token 认证，只读）
 		searchRouter.GET("/skills", controller.ListPublicSkills)

@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -68,7 +69,29 @@ func main() {
 		common.SysError(fmt.Sprintf("start pyroscope error: %v", err))
 	}
 
-	// 初始化 HTTP 服务（需在 logger.SetupLogger 之后创建，日志才会写入文件）
+	server := newServer()
+
+	port := common.GetEnvOrDefaultString("PORT", "3000")
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		common.SysError("failed to listen on :" + port + ": " + err.Error())
+		return
+	}
+	common.SysLog(fmt.Sprintf("server listening on :%s (startup took %s)", port, time.Since(startTime).Round(time.Millisecond)))
+
+	// 收到 Ctrl+C / SIGTERM 后优雅关闭：停止接收新连接，等待进行中的请求完成
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := runServer(ctx, server, listener); err != nil {
+		common.SysError("HTTP server error: " + err.Error())
+		return
+	}
+	common.SysLog("server stopped")
+}
+
+// newServer 创建 HTTP 服务并注册中间件与全部路由。
+// 需在 InitResources（logger.SetupLogger）之后调用，请求日志才会写入文件。
+func newServer() *gin.Engine {
 	server := gin.New()
 	server.Use(gin.CustomRecovery(func(c gin.Context, err any) {
 		common.SysError(fmt.Sprintf("panic detected: %v", err))
@@ -85,18 +108,12 @@ func main() {
 	server.Use(sessions.Sessions("session", newSessionStore()))
 
 	router.SetRouter(server, buildFS, indexPage)
+	return server
+}
 
-	port := common.GetEnvOrDefaultString("PORT", "3000")
-	common.SysLog(fmt.Sprintf("server listening on :%s (startup took %s)", port, time.Since(startTime).Round(time.Millisecond)))
-
-	// 收到 Ctrl+C / SIGTERM 后优雅关闭：停止接收新连接，等待进行中的请求完成
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	if err := server.RunContext(ctx, ":"+port); err != nil {
-		common.SysError("failed to start HTTP server: " + err.Error())
-		return
-	}
-	common.SysLog("server stopped")
+// runServer 在 listener 上提供服务，ctx 取消后优雅关闭并返回 nil。
+func runServer(ctx context.Context, server *gin.Engine, listener net.Listener) error {
+	return server.RunListenerContext(ctx, listener)
 }
 
 // InitResources 加载配置并初始化日志、HTTP 客户端、数据库、Redis 与系统监控。

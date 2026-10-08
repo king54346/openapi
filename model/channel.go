@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -72,8 +73,16 @@ func (c ChannelInfo) Value() (driver.Value, error) {
 }
 
 // Scan implements sql.Scanner interface
+// 列为 NULL 或空时视为零值，避免一行异常数据导致渠道缓存整体加载失败
 func (c *ChannelInfo) Scan(value interface{}) error {
-	bytesValue, _ := value.([]byte)
+	bytesValue, err := scanJSONBytes(value)
+	if err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(bytesValue)) == 0 {
+		*c = ChannelInfo{}
+		return nil
+	}
 	return common.Unmarshal(bytesValue, c)
 }
 
@@ -359,7 +368,10 @@ func BatchInsertChannels(channels []Channel) error {
 		}
 	}()
 
-	for _, chunk := range lo.Chunk(channels, 50) {
+	// 直接切原切片（共享底层数组），gorm 回填的自增 id 能带回调用方；lo.Chunk 会复制元素导致 id 丢失
+	const batchSize = 50
+	for start := 0; start < len(channels); start += batchSize {
+		chunk := channels[start:min(start+batchSize, len(channels))]
 		if err := tx.Create(&chunk).Error; err != nil {
 			tx.Rollback()
 			return err

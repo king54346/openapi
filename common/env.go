@@ -23,6 +23,7 @@ func InitEnv() {
 	ChannelAutoDisableEnabled = GetEnvOrDefaultBool("CHANNEL_AUTO_DISABLE_ENABLED", true)
 	ChannelAutoDisableThreshold = GetEnvOrDefault("CHANNEL_AUTO_DISABLE_THRESHOLD", 5)
 	ErrorLogEnabled = GetEnvOrDefaultBool("ERROR_LOG_ENABLED", true)
+	loadPerformanceMonitorConfigFromEnv()
 	RelayMaxIdleConns = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS", 500)
 	RelayMaxIdleConnsPerHost = GetEnvOrDefault("RELAY_MAX_IDLE_CONNS_PER_HOST", 100)
 

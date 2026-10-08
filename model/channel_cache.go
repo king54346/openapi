@@ -185,3 +185,23 @@ func RefreshChannelCache() {
 		common.SysError("failed to refresh channel cache: " + err.Error())
 	}
 }
+
+// GetEnabledModels 返回所有已启用渠道（任意分组）提供的模型名（去重、已排序）。
+func GetEnabledModels() []string {
+	cache := getChannelCache()
+	if cache == nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	for _, models := range cache.byGroupModel {
+		for m := range models {
+			seen[m] = struct{}{}
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for m := range seen {
+		names = append(names, m)
+	}
+	sort.Strings(names)
+	return names
+}

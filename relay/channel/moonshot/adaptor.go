@@ -65,7 +65,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c gin.Context, info *relaycommon.RelayInf
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
 	// TODO implement me
-	return nil, errors.New("not implemented")
+	return nil, channel.ErrNotImplemented
 }
 
 func (a *Adaptor) DoRequest(c gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {

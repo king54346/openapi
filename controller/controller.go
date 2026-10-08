@@ -53,11 +53,6 @@ func BatchRetestChannelModels(c gin.Context) {
 	notImplemented(c, "BatchRetestChannelModels", "")
 }
 
-// ChannelListModels（桩实现：501）。
-func ChannelListModels(c gin.Context) {
-	notImplemented(c, "ChannelListModels", "")
-}
-
 // ClearChannelAffinityCache（桩实现：501）。
 func ClearChannelAffinityCache(c gin.Context) {
 	notImplemented(c, "ClearChannelAffinityCache", "")
@@ -91,11 +86,6 @@ func CreatePrefillGroup(c gin.Context) {
 // CreateVendorMeta（桩实现：501）。
 func CreateVendorMeta(c gin.Context) {
 	notImplemented(c, "CreateVendorMeta", "")
-}
-
-// DashboardListModels（桩实现：501）。
-func DashboardListModels(c gin.Context) {
-	notImplemented(c, "DashboardListModels", "")
 }
 
 // DeleteChannelTestRecords（桩实现：501）。
@@ -141,11 +131,6 @@ func DeleteVendorMeta(c gin.Context) {
 // DownloadWebStarPackage（桩实现：501）。
 func DownloadWebStarPackage(c gin.Context) {
 	notImplemented(c, "DownloadWebStarPackage", "")
-}
-
-// EnabledListModels（桩实现：501）。
-func EnabledListModels(c gin.Context) {
-	notImplemented(c, "EnabledListModels", "")
 }
 
 // FetchUpstreamRatios（桩实现：501）。
@@ -591,9 +576,4 @@ func Verify2FALogin(c gin.Context) {
 // VideoProxy（桩实现：501）。
 func VideoProxy(c gin.Context) {
 	notImplemented(c, "VideoProxy", "")
-}
-
-// WebSearch（桩实现：501）。
-func WebSearch(c gin.Context) {
-	notImplemented(c, "WebSearch", "")
 }

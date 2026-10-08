@@ -229,8 +229,18 @@ func videoFetchByIDRespBodyBuilder(c gin.Context) (respBody []byte, taskResp *dt
 	return respBody, nil
 }
 
+// TaskModel2Dto 转成对外的任务数据（PrivateData 含渠道 key，不输出）。
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 	return &dto.TaskDto{
+		ID:         task.ID,
+		CreatedAt:  task.CreatedAt,
+		UpdatedAt:  task.UpdatedAt,
+		Platform:   string(task.Platform),
+		UserId:     task.UserId,
+		Group:      task.Group,
+		ChannelId:  task.ChannelId,
+		Quota:      task.Quota,
+		Properties: task.Properties,
 		TaskID:     task.TaskID,
 		Action:     task.Action,
 		Status:     string(task.Status),

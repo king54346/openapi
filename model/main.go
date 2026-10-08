@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -69,4 +70,18 @@ func quoteCol(name string, postgres bool) string {
 		return `"` + name + `"`
 	}
 	return "`" + name + "`"
+}
+
+// scanJSONBytes 取出 JSON 列的原始内容：SQLite 中可能是 BLOB（[]byte）或 TEXT（string），NULL 返回 nil。
+func scanJSONBytes(value any) ([]byte, error) {
+	switch v := value.(type) {
+	case nil:
+		return nil, nil
+	case []byte:
+		return v, nil
+	case string:
+		return []byte(v), nil
+	default:
+		return nil, fmt.Errorf("unsupported JSON column type %T", value)
+	}
 }

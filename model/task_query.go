@@ -6,8 +6,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// defaultUnfinishedTaskLimit limit 未配置（<=0）时每轮最多处理的任务数
+const defaultUnfinishedTaskLimit = 1000
+
 // GetAllUnFinishSyncTasks 取未结束的任务（按 id 升序），供后台轮询同步状态。
 func GetAllUnFinishSyncTasks(limit int) []*Task {
+	if limit <= 0 {
+		limit = defaultUnfinishedTaskLimit
+	}
 	var tasks []*Task
 	err := DB.Where("status NOT IN ?", []TaskStatus{TaskStatusSuccess, TaskStatusFailure}).
 		Order("id").Limit(limit).Find(&tasks).Error

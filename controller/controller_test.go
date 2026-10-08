@@ -3,11 +3,14 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"openapi/common"
 	"openapi/constant"
+	"openapi/dto"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -90,6 +93,52 @@ func TestShouldRetry(t *testing.T) {
 		if got := shouldRetry(c, tc.err, tc.remaining); got != tc.want {
 			t.Errorf("%s: shouldRetry = %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestShouldRetryTaskRelay(t *testing.T) {
+	cases := []struct {
+		name      string
+		err       *dto.TaskError
+		remaining int
+		specific  bool
+		want      bool
+	}{
+		{"429", &dto.TaskError{StatusCode: http.StatusTooManyRequests}, 1, false, true},
+		{"502", &dto.TaskError{StatusCode: http.StatusBadGateway}, 1, false, true},
+		{"504", &dto.TaskError{StatusCode: http.StatusGatewayTimeout}, 1, false, false},
+		{"400", &dto.TaskError{StatusCode: http.StatusBadRequest}, 1, false, false},
+		{"local error", &dto.TaskError{StatusCode: http.StatusInternalServerError, LocalError: true}, 1, false, false},
+		{"no retries left", &dto.TaskError{StatusCode: http.StatusBadGateway}, 0, false, false},
+		{"specific channel", &dto.TaskError{StatusCode: http.StatusBadGateway}, 1, true, false},
+		{"nil", nil, 1, false, false},
+	}
+	for _, tc := range cases {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		if tc.specific {
+			c.Set(string(constant.ContextKeyTokenSpecificChannelId), "3")
+		}
+		if got := shouldRetryTaskRelay(c, tc.err, tc.remaining); got != tc.want {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestRequestBodyError(t *testing.T) {
+	if e := requestBodyError(fmt.Errorf("wrap: %w", common.ErrRequestBodyTooLarge)); e.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("too large: %d", e.StatusCode)
+	}
+	if e := requestBodyError(errors.New("field messages is required")); e.StatusCode != http.StatusBadRequest || !types.IsSkipRetryError(e) {
+		t.Fatalf("bad request: %d", e.StatusCode)
+	}
+}
+
+func TestRetryPathTracking(t *testing.T) {
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	addUsedChannel(c, 3)
+	addUsedChannel(c, 999)
+	if got := c.GetStringSlice("use_channel"); len(got) != 2 || got[0] != "3" || got[1] != "999" {
+		t.Fatalf("use_channel = %v", got)
 	}
 }
 

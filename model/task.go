@@ -86,7 +86,10 @@ type Properties struct {
 }
 
 func (m *Properties) Scan(val interface{}) error {
-	bytesValue, _ := val.([]byte)
+	bytesValue, err := scanJSONBytes(val)
+	if err != nil {
+		return err
+	}
 	if len(bytesValue) == 0 {
 		*m = Properties{}
 		return nil
@@ -107,7 +110,10 @@ type TaskPrivateData struct {
 }
 
 func (p *TaskPrivateData) Scan(val interface{}) error {
-	bytesValue, _ := val.([]byte)
+	bytesValue, err := scanJSONBytes(val)
+	if err != nil {
+		return err
+	}
 	if len(bytesValue) == 0 {
 		return nil
 	}

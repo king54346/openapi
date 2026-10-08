@@ -204,3 +204,32 @@ func TestChannelWeight(t *testing.T) {
 		t.Fatalf("channel 1 ratio = %.2f, want ~0.91", ratio)
 	}
 }
+
+// TestJSONColumnsAcceptTextAndNull JSON 列存成 TEXT、NULL 或空串时都能读取，不影响渠道缓存加载。
+func TestJSONColumnsAcceptTextAndNull(t *testing.T) {
+	setupTestDB(t)
+	mustCreate(t, newChannel(1, constant.ChannelTypeOpenAI, common.ChannelStatusEnabled, "default", "m", 0, 0))
+	mustCreate(t, newChannel(2, constant.ChannelTypeOpenAI, common.ChannelStatusEnabled, "default", "m", 0, 0))
+	mustCreate(t, newChannel(3, constant.ChannelTypeOpenAI, common.ChannelStatusEnabled, "default", "m", 0, 0))
+	DB.Exec(`UPDATE channels SET channel_info = '{"is_multi_key":true,"multi_key_size":2}' WHERE id = 1`)
+	DB.Exec(`UPDATE channels SET channel_info = NULL WHERE id = 2`)
+	DB.Exec(`UPDATE channels SET channel_info = '' WHERE id = 3`)
+	if err := InitChannelCache(); err != nil {
+		t.Fatalf("channel cache should load: %v", err)
+	}
+	ch, err := GetChannelById(1, true)
+	if err != nil || !ch.ChannelInfo.IsMultiKey || ch.ChannelInfo.MultiKeySize != 2 {
+		t.Fatalf("TEXT channel_info: %+v, %v", ch, err)
+	}
+
+	task := &Task{TaskID: "t1", Properties: Properties{OriginModelName: "sora-2"}}
+	mustCreate(t, task)
+	DB.Exec(`UPDATE tasks SET properties = '{"origin_model_name":"sora-2"}', private_data = '{"key":"k"}' WHERE id = ?`, task.ID)
+	var got Task
+	if err := DB.First(&got, task.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.Properties.OriginModelName != "sora-2" || got.PrivateData.Key != "k" {
+		t.Fatalf("TEXT task json: %+v %+v", got.Properties, got.PrivateData)
+	}
+}

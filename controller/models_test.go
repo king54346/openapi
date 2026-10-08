@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"testing"
 
 	"openapi/common"
@@ -85,6 +86,66 @@ func TestUsableModels(t *testing.T) {
 		if !slices.Equal(got, tc.want) {
 			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
 		}
+	}
+}
+
+// callAdmin 调用管理端接口并解出 data。
+func callAdmin[T any](t *testing.T, handler gin.HandlerFunc) T {
+	t.Helper()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	handler(c)
+	var resp struct {
+		Success bool `json:"success"`
+		Data    T    `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || !resp.Success {
+		t.Fatalf("response: %s (%v)", w.Body.String(), err)
+	}
+	return resp.Data
+}
+
+func TestChannelListModels(t *testing.T) {
+	models := callAdmin[[]openAIModel](t, ChannelListModels)
+	owners := make(map[string]string, len(models))
+	for _, m := range models {
+		if _, dup := owners[m.Id]; dup {
+			t.Fatalf("duplicate model %s", m.Id)
+		}
+		owners[m.Id] = m.OwnedBy
+	}
+	for name, owner := range map[string]string{"gpt-4o": "openai", "deepseek-chat": "deepseek"} {
+		if owners[name] != owner {
+			t.Errorf("%s: owned_by=%q, want %q", name, owners[name], owner)
+		}
+	}
+	if _, ok := owners["sora-2"]; !ok {
+		t.Error("video task models should be included")
+	}
+}
+
+func TestDashboardListModels(t *testing.T) {
+	byType := callAdmin[map[string][]string](t, DashboardListModels)
+	if !slices.Contains(byType[strconv.Itoa(constant.ChannelTypeDeepSeek)], "deepseek-chat") {
+		t.Errorf("deepseek models: %v", byType[strconv.Itoa(constant.ChannelTypeDeepSeek)])
+	}
+	if !slices.Contains(byType[strconv.Itoa(constant.ChannelTypeSora)], "sora-2") {
+		t.Errorf("sora (video only) models: %v", byType[strconv.Itoa(constant.ChannelTypeSora)])
+	}
+	if _, ok := byType[strconv.Itoa(constant.ChannelTypeGemini)]; ok {
+		t.Error("unsupported channel types must not be listed")
+	}
+	for channelType, names := range byType {
+		if len(uniqueStrings(names)) != len(names) {
+			t.Errorf("type %s has duplicate models", channelType)
+		}
+	}
+}
+
+func TestEnabledListModels(t *testing.T) {
+	setupModelCache(t)
+	if got := callAdmin[[]string](t, EnabledListModels); !slices.Equal(got, []string{"a", "b", "c", "d"}) {
+		t.Fatalf("enabled models = %v (disabled channel models must be excluded)", got)
 	}
 }
 

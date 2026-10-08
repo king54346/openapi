@@ -1,6 +1,9 @@
 package relay
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"strconv"
 
 	"openapi/constant"
@@ -15,6 +18,8 @@ import (
 	"openapi/relay/channel/task/hailuo"
 	tasksora "openapi/relay/channel/task/sora"
 	"openapi/relay/channel/volcengine"
+	relaycommon "openapi/relay/common"
+	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
 )
@@ -64,4 +69,15 @@ func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
 		return &hailuo.TaskAdaptor{}
 	}
 	return nil
+}
+
+// convertRequestError 请求格式转换失败：渠道不支持该接口时返回 400，其余为本地转换错误。
+// 两种情况都不重试、不计入渠道失败（问题在请求或渠道能力，换同类渠道也无济于事）。
+func convertRequestError(c gin.Context, info *relaycommon.RelayInfo, err error) *types.StarAPIError {
+	if errors.Is(err, channel.ErrNotImplemented) {
+		return types.NewErrorWithStatusCode(
+			fmt.Errorf("channel type %s does not support %s", constant.GetChannelTypeName(info.ChannelType), c.Request().URL.Path),
+			types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
+	}
+	return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 }

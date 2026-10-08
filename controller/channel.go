@@ -359,7 +359,11 @@ func AddChannel(c gin.Context) {
 	}
 	service.ResetProxyClientCache()
 	model.RefreshChannelCache()
-	apiSuccess(c, gin.H{"count": len(channels)})
+	ids := make([]int, 0, len(channels))
+	for _, ch := range channels {
+		ids = append(ids, ch.Id)
+	}
+	apiSuccess(c, gin.H{"count": len(channels), "ids": ids})
 }
 
 // patchChannel 修改渠道请求：multi_key_mode 修改多 key 选择方式；

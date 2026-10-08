@@ -1,6 +1,7 @@
 package channel
 
 import (
+	"errors"
 	"io"
 	"net/http"
 
@@ -53,3 +54,7 @@ type TaskAdaptor interface {
 type OpenAIVideoConverter interface {
 	ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error)
 }
+
+// ErrNotImplemented 渠道适配器不支持该接口（如 DeepSeek 不支持 Responses / 图片），
+// 转发层据此返回 400，而不是当作上游故障。
+var ErrNotImplemented = errors.New("not implemented")
