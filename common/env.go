@@ -13,6 +13,7 @@ func InitEnv() {
 		Version = v
 	}
 	DebugEnabled = os.Getenv("DEBUG") == "true"
+	IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
 	MemoryCacheEnabled = os.Getenv("MEMORY_CACHE_ENABLED") == "true"
 	BatchUpdateEnabled = GetEnvOrDefaultBool("BATCH_UPDATE_ENABLED", false)
 	BatchUpdateInterval = GetEnvOrDefault("BATCH_UPDATE_INTERVAL", 5)

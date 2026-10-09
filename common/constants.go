@@ -6,6 +6,10 @@ var StartTime = time.Now().Unix() // 单位：秒
 var Version = "v0.0.0"
 
 var DebugEnabled bool
+
+// IsMasterNode 节点类型（NODE_TYPE=master/slave）。多实例部署时只有 master 执行数据库迁移、
+// 异步任务轮询与定时任务，slave 只处理请求。
+var IsMasterNode = true
 var MemoryCacheEnabled bool
 
 var LogConsumeEnabled = true

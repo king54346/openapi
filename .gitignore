@@ -1,0 +1,9 @@
+# 本地配置（可能含数据库密码、会话密钥），模板见 .env.example
+.env
+
+# 本地调试请求（含账号密码）与 SQLite 数据库（含渠道 key）
+a.http
+one-api.db
+*.db-journal
+*.db-wal
+*.db-shm

@@ -134,15 +134,15 @@ func GetUserTask(c gin.Context) {
 	apiSuccess(c, pageResult(page, items, total))
 }
 
-// taskPollingEnabled 是否启动后台任务轮询（多实例部署时只需一个实例开启）。
+// taskPollingEnabled 是否启动后台任务轮询，默认只在 master 节点开启（多实例部署时只需一个实例轮询）。
 func taskPollingEnabled() bool {
-	return common.GetEnvOrDefaultBool("UPDATE_TASK", true)
+	return common.GetEnvOrDefaultBool("UPDATE_TASK", common.IsMasterNode)
 }
 
 // StartTaskPolling 按配置启动后台任务轮询。
 func StartTaskPolling() {
 	if !taskPollingEnabled() {
-		common.SysLog("task polling disabled (UPDATE_TASK=false)")
+		common.SysLog("task polling disabled (UPDATE_TASK=false or slave node)")
 		return
 	}
 	go UpdateTaskBulk()

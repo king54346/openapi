@@ -17,6 +17,7 @@ import (
 	"openapi/common"
 	"openapi/common/system"
 	"openapi/controller"
+	"openapi/database"
 	"openapi/logger"
 	"openapi/middleware"
 	"openapi/model"
@@ -25,13 +26,11 @@ import (
 	"openapi/service/cron"
 
 	"github.com/bytedance/gopkg/util/gopool"
-	"github.com/glebarez/sqlite"
 	"github.com/joho/godotenv"
 	gin "github.com/king54346/gin-tiny"
 	"github.com/king54346/gin-tiny/middleware/sessions"
 	"github.com/king54346/gin-tiny/middleware/sessions/cookie"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // 暂无内置前端：buildFS 为空、indexPage 为 nil 时，
@@ -44,11 +43,12 @@ var (
 func main() {
 	startTime := time.Now()
 
-	db, err := InitResources()
+	db, logDB, err := InitResources()
 	if err != nil {
 		common.FatalLog("failed to initialize resources: " + err.Error())
 	}
-	defer closeDB(db)
+	defer database.Close(db)
+	defer database.Close(logDB)
 
 	common.SysLog("OpenAPI " + common.Version + " started")
 	if os.Getenv("GIN_MODE") != "debug" {
@@ -57,13 +57,17 @@ func main() {
 	if common.DebugEnabled {
 		common.SysLog("running in debug mode")
 	}
+	if !common.IsMasterNode {
+		common.SysLog("running as slave node: migrations, task polling and cron are disabled by default")
+	}
 
-	if os.Getenv("ENABLE_PPROF") == "true" {
+	if common.GetEnvOrDefaultBool("ENABLE_PPROF", false) {
+		pprofAddr := "0.0.0.0:" + common.GetEnvOrDefaultString("PPROF_PORT", "8005")
 		gopool.Go(func() {
-			log.Println(http.ListenAndServe("0.0.0.0:8005", nil))
+			log.Println(http.ListenAndServe(pprofAddr, nil))
 		})
 		go system.Monitor()
-		common.SysLog("pprof enabled on :8005")
+		common.SysLog("pprof enabled on " + pprofAddr)
 	}
 
 	if err := system.StartPyroScope(); err != nil {
@@ -118,7 +122,8 @@ func runServer(ctx context.Context, server *gin.Engine, listener net.Listener) e
 }
 
 // InitResources 加载配置并初始化日志、HTTP 客户端、数据库、Redis 与系统监控。
-func InitResources() (*gorm.DB, error) {
+// 返回业务库与日志库连接；未配置 LOG_SQL_DSN 时 logDB 为 nil（与业务库共用）。
+func InitResources() (*gorm.DB, *gorm.DB, error) {
 	if err := godotenv.Load(".env"); err != nil && common.DebugEnabled {
 		common.SysLog("no .env file found, using environment variables")
 	}
@@ -127,7 +132,7 @@ func InitResources() (*gorm.DB, error) {
 	common.InitEnv()
 
 	if err := logger.SetupLogger(os.Getenv("LOG_DIR")); err != nil {
-		return nil, fmt.Errorf("setup logger: %w", err)
+		return nil, nil, fmt.Errorf("setup logger: %w", err)
 	}
 
 	service.InitHttpClient()
@@ -138,31 +143,35 @@ func InitResources() (*gorm.DB, error) {
 		common.SysError("failed to cleanup old disk cache files: " + err.Error())
 	}
 
-	db, err := openDB()
+	// 数据库：SQL_DSN 选择 SQLite / MySQL / PostgreSQL，LOG_SQL_DSN 可把日志单独存库
+	mainDB, logsDB, err := database.Open(database.ConfigFromEnv())
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return nil, nil, err
 	}
-	if err := model.InitDB(db, nil); err != nil {
-		closeDB(db)
-		return nil, fmt.Errorf("migrate database: %w", err)
+	fail := func(err error) (*gorm.DB, *gorm.DB, error) {
+		database.Close(mainDB)
+		database.Close(logsDB)
+		return nil, nil, err
+	}
+	if err := model.InitDB(mainDB, logsDB); err != nil {
+		return fail(fmt.Errorf("migrate database: %w", err))
 	}
 
 	// 渠道缓存：启动时加载，之后每 SYNC_FREQUENCY 秒从数据库重建
 	if err := model.InitChannelCache(); err != nil {
-		closeDB(db)
-		return nil, fmt.Errorf("load channel cache: %w", err)
+		return fail(fmt.Errorf("load channel cache: %w", err))
 	}
 	go model.SyncChannelCache(common.SyncFrequency)
 
-	// 异步任务（视频等）后台轮询；多实例部署时只在一个实例开启（UPDATE_TASK=true）
+	// 异步任务（视频等）后台轮询；UPDATE_TASK 默认只在 master 节点开启
 	controller.StartTaskPolling()
 
-	// 通用定时任务（如 channel_test 定时测试渠道）；多实例部署时只在一个实例开启（CRON_ENABLED=true）
+	// 通用定时任务（如 channel_test 定时测试渠道）；CRON_ENABLED 默认只在 master 节点开启
 	controller.RegisterCronExecutors()
-	if common.GetEnvOrDefaultBool("CRON_ENABLED", true) {
+	if common.GetEnvOrDefaultBool("CRON_ENABLED", common.IsMasterNode) {
 		cron.StartScheduler()
 	} else {
-		common.SysLog("cron scheduler disabled (CRON_ENABLED=false)")
+		common.SysLog("cron scheduler disabled (CRON_ENABLED=false or slave node)")
 	}
 
 	// Redis：REDIS_CONN_STRING 或 REDIS_ADDR 都未配置时保持禁用，走内存限流
@@ -173,27 +182,7 @@ func InitResources() (*gorm.DB, error) {
 	// 启动系统监控（供 SystemPerformanceCheck 中间件使用）
 	system.StartSystemMonitor()
 
-	return db, nil
-}
-
-// openDB 打开 SQLite 数据库。SQLITE_PATH 可带 DSN 参数，默认使用工作目录下的 one-api.db。
-// 使用纯 Go 驱动（glebarez/sqlite），无需 cgo。
-func openDB() (*gorm.DB, error) {
-	dsn := common.GetEnvOrDefaultString("SQLITE_PATH", "one-api.db?_pragma=busy_timeout(5000)")
-	common.SysLog("using SQLite: " + dsn)
-	logLevel := gormlogger.Warn
-	if common.DebugEnabled {
-		logLevel = gormlogger.Info
-	}
-	return gorm.Open(sqlite.Open(dsn), &gorm.Config{
-		PrepareStmt: true,
-		Logger: gormlogger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), gormlogger.Config{
-			SlowThreshold: 500 * time.Millisecond,
-			LogLevel:      logLevel,
-			// 令牌/用户查不到是正常的鉴权失败，不当作错误输出
-			IgnoreRecordNotFoundError: true,
-		}),
-	})
+	return mainDB, logsDB, nil
 }
 
 // newSessionStore 创建 cookie session 存储。未设置 SESSION_SECRET 时使用随机密钥，
@@ -213,15 +202,4 @@ func newSessionStore() sessions.Store {
 		SameSite: http.SameSiteStrictMode,
 	})
 	return store
-}
-
-func closeDB(db *gorm.DB) {
-	sqlDB, err := db.DB()
-	if err != nil {
-		common.SysError("failed to get sql.DB: " + err.Error())
-		return
-	}
-	if err := sqlDB.Close(); err != nil {
-		common.SysError("failed to close database: " + err.Error())
-	}
 }

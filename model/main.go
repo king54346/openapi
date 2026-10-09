@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"openapi/common"
+
 	"gorm.io/gorm"
 )
 
@@ -23,8 +25,8 @@ var (
 	logGroupCol    string
 )
 
-// InitDB 注入数据库连接并自动迁移表结构。logDB 为 nil 时日志与业务数据共用 db。
-// 数据库驱动由调用方选择（gorm.io/driver/mysql、postgres、sqlite 等），这里不做绑定。
+// InitDB 注入数据库连接并自动迁移表结构（仅 master 节点迁移）。logDB 为 nil 时日志与业务数据共用 db。
+// 连接由 database 包按 SQL_DSN 打开，这里不绑定具体驱动。
 func InitDB(db *gorm.DB, logDB *gorm.DB) error {
 	if db == nil {
 		return errors.New("db is nil")
@@ -41,6 +43,10 @@ func InitDB(db *gorm.DB, logDB *gorm.DB) error {
 	_, logUsingPostgreSQL := dialectOf(logDB)
 	logGroupCol = quoteCol("group", logUsingPostgreSQL)
 
+	// 多实例部署时只由 master 节点迁移表结构
+	if !common.IsMasterNode {
+		return nil
+	}
 	if err := DB.AutoMigrate(&Channel{}, &Task{}, &CronJob{}, &CronJobRun{}); err != nil {
 		return err
 	}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"openapi/common"
+	"openapi/database"
 	"openapi/constant"
 	"openapi/model"
 
@@ -187,7 +188,9 @@ func TestMainIntegration(t *testing.T) {
 	upstream := newMockUpstream(t)
 
 	dbPath := filepath.ToSlash(filepath.Join(t.TempDir(), "integration.db"))
-	t.Setenv("SQLITE_PATH", dbPath+"?_pragma=busy_timeout(5000)")
+	t.Setenv("SQL_DSN", "") // 走 SQLite
+	t.Setenv("LOG_SQL_DSN", "")
+	t.Setenv("SQLITE_PATH", dbPath)
 	t.Setenv("SESSION_SECRET", "integration-test-secret")
 	t.Setenv("RETRY_TIMES", "1")
 	t.Setenv("CHANNEL_AUTO_DISABLE_THRESHOLD", "2")
@@ -196,11 +199,14 @@ func TestMainIntegration(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// ---------- 启动 ----------
-	db, err := InitResources()
+	db, logDB, err := InitResources()
 	if err != nil {
 		t.Fatalf("InitResources: %v", err)
 	}
-	t.Cleanup(func() { closeDB(db) })
+	t.Cleanup(func() {
+		database.Close(db)
+		database.Close(logDB)
+	})
 	if common.RetryTimes != 1 || common.ChannelAutoDisableThreshold != 2 {
 		t.Fatalf("env not loaded: retry=%d threshold=%d", common.RetryTimes, common.ChannelAutoDisableThreshold)
 	}
