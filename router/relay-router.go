@@ -121,19 +121,6 @@ func SetRelayRouter(router *gin.Engine) {
 	// ==================== OpenAI 主要 API 路由 ====================
 	// 路径前缀: /v1
 	// 支持 OpenAI、Claude、Gemini 等多种服务商的 API 请求转发
-	// ==================== 不经过渠道分发的只读接口 ====================
-	// 仅做 Token 认证，不经过渠道分发（Distribute，依赖模型）。
-	searchRouter := router.Group("/v1")
-	searchRouter.Use(middleware.SystemPerformanceCheck()) // 系统性能检查
-	searchRouter.Use(middleware.TokenAuth())              // Token 认证
-	{
-		// ==================== Skill 市场对外只读接口 ====================
-		// GET /v1/skills - 技能列表（Token 认证，只读）
-		searchRouter.GET("/skills", controller.ListPublicSkills)
-		// GET /v1/skills/:id - 技能详情
-		searchRouter.GET("/skills/:id", controller.GetPublicSkill)
-	}
-
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.SystemPerformanceCheck()) // 系统性能检查
 	relayV1Router.Use(middleware.TokenAuth())              // Token 认证

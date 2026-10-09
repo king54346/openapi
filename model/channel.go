@@ -222,7 +222,7 @@ func (channel *Channel) GetOtherInfo() map[string]interface{} {
 }
 
 func (channel *Channel) SetOtherInfo(otherInfo map[string]interface{}) {
-	otherInfoBytes, err := json.Marshal(otherInfo)
+	otherInfoBytes, err := common.Marshal(otherInfo)
 	if err != nil {
 		common.SysLog(fmt.Sprintf("failed to marshal other info: channel_id=%d, tag=%s, name=%s, error=%v", channel.Id, channel.GetTag(), channel.Name, err))
 		return
@@ -259,21 +259,6 @@ func (channel *Channel) SaveWithoutKey() error {
 	return DB.Omit("key").Save(channel).Error
 }
 
-func GetAllChannels(startIdx int, num int, selectAll bool, idSort bool) ([]*Channel, error) {
-	var channels []*Channel
-	var err error
-	order := "priority desc"
-	if idSort {
-		order = "id desc"
-	}
-	if selectAll {
-		err = DB.Order(order).Find(&channels).Error
-	} else {
-		err = DB.Order(order).Limit(num).Offset(startIdx).Omit("key").Find(&channels).Error
-	}
-	return channels, err
-}
-
 func GetChannelsByTag(tag string, idSort bool, selectAll bool) ([]*Channel, error) {
 	var channels []*Channel
 	order := "priority desc"
@@ -286,55 +271,6 @@ func GetChannelsByTag(tag string, idSort bool, selectAll bool) ([]*Channel, erro
 	}
 	err := query.Find(&channels).Error
 	return channels, err
-}
-
-func SearchChannels(keyword string, group string, model string, idSort bool) ([]*Channel, error) {
-	var channels []*Channel
-	modelsCol := "`models`"
-
-	// 如果是 PostgreSQL，使用双引号
-	if usingPostgreSQL {
-		modelsCol = `"models"`
-	}
-
-	baseURLCol := "`base_url`"
-	// 如果是 PostgreSQL，使用双引号
-	if usingPostgreSQL {
-		baseURLCol = `"base_url"`
-	}
-
-	order := "priority desc"
-	if idSort {
-		order = "id desc"
-	}
-
-	// 构造基础查询
-	baseQuery := DB.Model(&Channel{}).Omit("key")
-
-	// 构造WHERE子句
-	var whereClause string
-	var args []interface{}
-	if group != "" && group != "null" {
-		var groupCondition string
-		if usingMySQL {
-			groupCondition = `CONCAT(',', ` + commonGroupCol + `, ',') LIKE ?`
-		} else {
-			// sqlite, PostgreSQL
-			groupCondition = `(',' || ` + commonGroupCol + ` || ',') LIKE ?`
-		}
-		whereClause = "(id = ? OR name LIKE ? OR " + commonKeyCol + " = ? OR " + baseURLCol + " LIKE ?) AND " + modelsCol + ` LIKE ? AND ` + groupCondition
-		args = append(args, common.String2Int(keyword), "%"+keyword+"%", keyword, "%"+keyword+"%", "%"+model+"%", "%,"+group+",%")
-	} else {
-		whereClause = "(id = ? OR name LIKE ? OR " + commonKeyCol + " = ? OR " + baseURLCol + " LIKE ?) AND " + modelsCol + " LIKE ?"
-		args = append(args, common.String2Int(keyword), "%"+keyword+"%", keyword, "%"+keyword+"%", "%"+model+"%")
-	}
-
-	// 执行查询
-	err := baseQuery.Where(whereClause, args...).Order(order).Find(&channels).Error
-	if err != nil {
-		return nil, err
-	}
-	return channels, nil
 }
 
 func GetChannelById(id int, selectAll bool) (*Channel, error) {
@@ -665,69 +601,6 @@ func DeleteDisabledChannel() (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
-func GetPaginatedTags(offset int, limit int) ([]*string, error) {
-	var tags []*string
-	err := DB.Model(&Channel{}).Select("DISTINCT tag").Where("tag != ''").Offset(offset).Limit(limit).Find(&tags).Error
-	return tags, err
-}
-
-func SearchTags(keyword string, group string, model string, idSort bool) ([]*string, error) {
-	var tags []*string
-	modelsCol := "`models`"
-
-	// 如果是 PostgreSQL，使用双引号
-	if usingPostgreSQL {
-		modelsCol = `"models"`
-	}
-
-	baseURLCol := "`base_url`"
-	// 如果是 PostgreSQL，使用双引号
-	if usingPostgreSQL {
-		baseURLCol = `"base_url"`
-	}
-
-	order := "priority desc"
-	if idSort {
-		order = "id desc"
-	}
-
-	// 构造基础查询
-	baseQuery := DB.Model(&Channel{}).Omit("key")
-
-	// 构造WHERE子句
-	var whereClause string
-	var args []interface{}
-	if group != "" && group != "null" {
-		var groupCondition string
-		if usingMySQL {
-			groupCondition = `CONCAT(',', ` + commonGroupCol + `, ',') LIKE ?`
-		} else {
-			// sqlite, PostgreSQL
-			groupCondition = `(',' || ` + commonGroupCol + ` || ',') LIKE ?`
-		}
-		whereClause = "(id = ? OR name LIKE ? OR " + commonKeyCol + " = ? OR " + baseURLCol + " LIKE ?) AND " + modelsCol + ` LIKE ? AND ` + groupCondition
-		args = append(args, common.String2Int(keyword), "%"+keyword+"%", keyword, "%"+keyword+"%", "%"+model+"%", "%,"+group+",%")
-	} else {
-		whereClause = "(id = ? OR name LIKE ? OR " + commonKeyCol + " = ? OR " + baseURLCol + " LIKE ?) AND " + modelsCol + " LIKE ?"
-		args = append(args, common.String2Int(keyword), "%"+keyword+"%", keyword, "%"+keyword+"%", "%"+model+"%")
-	}
-
-	subQuery := baseQuery.Where(whereClause, args...).
-		Select("tag").
-		Where("tag != ''").
-		Order(order)
-
-	err := DB.Table("(?) as sub", subQuery).
-		Select("DISTINCT tag").
-		Find(&tags).Error
-
-	if err != nil {
-		return nil, err
-	}
-
-	return tags, nil
-}
-
 func (channel *Channel) ValidateSettings() error {
 	channelParams := &dto.ChannelSettings{}
 	if channel.Setting != nil && *channel.Setting != "" {
@@ -809,56 +682,6 @@ func GetChannelsByIds(ids []int) ([]*Channel, error) {
 	var channels []*Channel
 	err := DB.Where("id in (?)", ids).Find(&channels).Error
 	return channels, err
-}
-
-// CountAllChannels returns total channels in DB
-func CountAllChannels() (int64, error) {
-	var total int64
-	err := DB.Model(&Channel{}).Count(&total).Error
-	return total, err
-}
-
-// CountAllTags returns number of non-empty distinct tags
-func CountAllTags() (int64, error) {
-	var total int64
-	err := DB.Model(&Channel{}).Where("tag is not null AND tag != ''").Distinct("tag").Count(&total).Error
-	return total, err
-}
-
-// Get channels of specified type with pagination
-func GetChannelsByType(startIdx int, num int, idSort bool, channelType int) ([]*Channel, error) {
-	var channels []*Channel
-	order := "priority desc"
-	if idSort {
-		order = "id desc"
-	}
-	err := DB.Where("type = ?", channelType).Order(order).Limit(num).Offset(startIdx).Omit("key").Find(&channels).Error
-	return channels, err
-}
-
-// Count channels of specific type
-func CountChannelsByType(channelType int) (int64, error) {
-	var count int64
-	err := DB.Model(&Channel{}).Where("type = ?", channelType).Count(&count).Error
-	return count, err
-}
-
-// Return map[type]count for all channels
-func CountChannelsGroupByType() (map[int64]int64, error) {
-	type result struct {
-		Type  int64 `gorm:"column:type"`
-		Count int64 `gorm:"column:count"`
-	}
-	var results []result
-	err := DB.Model(&Channel{}).Select("type, count(*) as count").Group("type").Find(&results).Error
-	if err != nil {
-		return nil, err
-	}
-	counts := make(map[int64]int64)
-	for _, r := range results {
-		counts[r.Type] = r.Count
-	}
-	return counts, nil
 }
 
 func BatchSetChannelTag(ids []int, tag *string) error {

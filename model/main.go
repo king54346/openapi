@@ -41,11 +41,11 @@ func InitDB(db *gorm.DB, logDB *gorm.DB) error {
 	_, logUsingPostgreSQL := dialectOf(logDB)
 	logGroupCol = quoteCol("group", logUsingPostgreSQL)
 
-	if err := DB.AutoMigrate(&Channel{}, &Task{}); err != nil {
+	if err := DB.AutoMigrate(&Channel{}, &Task{}, &CronJob{}, &CronJobRun{}); err != nil {
 		return err
 	}
-	// users / tokens 表由管理端维护且列更多，已存在时不迁移，避免改动其结构；仅新库时建最小表
-	for _, table := range []any{&User{}, &Token{}} {
+	// users / tokens / models 表由管理端维护且列更多，已存在时不迁移，避免改动其结构；仅新库时建表
+	for _, table := range []any{&User{}, &Token{}, &Model{}} {
 		if !DB.Migrator().HasTable(table) {
 			if err := DB.AutoMigrate(table); err != nil {
 				return err

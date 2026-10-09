@@ -44,14 +44,12 @@ func RelayErrorHandler(ctx context.Context, resp *http.Response, showBodyWhenFai
 		return
 	}
 
-	if common.GetJsonType(errResponse.Error) == "object" {
-		if oaiError := errResponse.TryToOpenAIError(); oaiError != nil {
-			apiErr = types.WithOpenAIError(*oaiError, resp.StatusCode)
-			if showBodyWhenFail {
-				apiErr.Err = buildErrWithBody(apiErr.Error())
-			}
-			return
+	if oaiError := errResponse.TryToOpenAIError(); oaiError != nil {
+		apiErr = types.WithOpenAIError(*oaiError, resp.StatusCode)
+		if showBodyWhenFail {
+			apiErr.Err = buildErrWithBody(apiErr.Error())
 		}
+		return
 	}
 	apiErr = types.NewOpenAIError(errors.New(errResponse.ToMessage()), types.ErrorCodeBadResponseStatusCode, resp.StatusCode)
 	if showBodyWhenFail {

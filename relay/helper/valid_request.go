@@ -1,7 +1,6 @@
 package helper
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -148,7 +147,7 @@ func GetAndValidOpenAIImageRequest(c gin.Context, relayMode int) (*dto.ImageRequ
 			imageRequest.Quality = formData.Get("quality")
 			imageRequest.Size = formData.Get("size")
 			if imageValue := formData.Get("image"); imageValue != "" {
-				imageRequest.Image, _ = json.Marshal(imageValue)
+				imageRequest.Image, _ = common.Marshal(imageValue)
 			}
 
 			if imageRequest.Model == "gpt-image-1" {
@@ -218,7 +217,7 @@ func GetAndValidOpenAIImageRequest(c gin.Context, relayMode int) (*dto.ImageRequ
 		// Validate and normalize image parameter if present
 		if len(imageRequest.Image) > 0 {
 			var imageValue string
-			if err := json.Unmarshal(imageRequest.Image, &imageValue); err == nil && imageValue != "" {
+			if err := common.Unmarshal(imageRequest.Image, &imageValue); err == nil && imageValue != "" {
 				// Check if it's a URL
 				if strings.HasPrefix(imageValue, "http://") || strings.HasPrefix(imageValue, "https://") {
 					// Validate URL format
@@ -262,7 +261,7 @@ func GetAndValidOpenAIImageRequest(c gin.Context, relayMode int) (*dto.ImageRequ
 
 					// Convert to data URI format
 					dataURI := fmt.Sprintf("data:%s;base64,%s", mimeType, imageValue)
-					imageRequest.Image, _ = json.Marshal(dataURI)
+					imageRequest.Image, _ = common.Marshal(dataURI)
 				}
 			}
 		}

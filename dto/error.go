@@ -38,56 +38,52 @@ type GeneralErrorResponse struct {
 	} `json:"response"`
 }
 
+// TryToOpenAIError error 字段是带 message 的 OpenAI 错误对象时返回它，否则返回 nil。
 func (e GeneralErrorResponse) TryToOpenAIError() *types.OpenAIError {
-	var openAIError types.OpenAIError
-	if len(e.Error) > 0 {
-		err := common.Unmarshal(e.Error, &openAIError)
-		if err == nil && openAIError.Message != "" {
-			return &openAIError
-		}
+	if common.JSONKindOf(e.Error) != common.JSONObject {
+		return nil
 	}
-	return nil
+	var openAIError types.OpenAIError
+	if err := common.Unmarshal(e.Error, &openAIError); err != nil || openAIError.Message == "" {
+		return nil
+	}
+	return &openAIError
 }
 
-func (e GeneralErrorResponse) ToMessage() string {
-	if len(e.Error) > 0 {
-		switch common.GetJsonType(e.Error) {
-		case "object":
-			var openAIError types.OpenAIError
-			err := common.Unmarshal(e.Error, &openAIError)
-			if err == nil && openAIError.Message != "" {
-				return openAIError.Message
-			}
-		case "string":
-			var msg string
-			err := common.Unmarshal(e.Error, &msg)
-			if err == nil && msg != "" {
-				return msg
-			}
-		default:
-			return string(e.Error)
+// errorFieldMessage 从 error 字段取错误信息：OpenAI 错误对象取 message，字符串取其值，
+// 数字、数组等原样返回文本；null、空值或取不到时返回空串。
+func (e GeneralErrorResponse) errorFieldMessage() string {
+	switch common.JSONKindOf(e.Error) {
+	case common.JSONObject:
+		if oaiErr := e.TryToOpenAIError(); oaiErr != nil {
+			return oaiErr.Message
 		}
+		return ""
+	case common.JSONString:
+		msg, _ := common.DecodeJSONString(e.Error)
+		return msg
+	case common.JSONInvalid, common.JSONNull:
+		return ""
+	default:
+		return string(e.Error)
 	}
-	if e.Message != "" {
-		return e.Message
-	}
-	if e.Msg != "" {
-		return e.Msg
-	}
-	if e.Err != "" {
-		return e.Err
-	}
-	if e.ErrorMsg != "" {
-		return e.ErrorMsg
-	}
-	if e.Detail != "" {
-		return e.Detail
-	}
-	if e.Header.Message != "" {
-		return e.Header.Message
-	}
-	if e.Response.Error.Message != "" {
-		return e.Response.Error.Message
+}
+
+// ToMessage 按优先级从各家上游的错误格式中取出第一条非空错误信息。
+func (e GeneralErrorResponse) ToMessage() string {
+	for _, msg := range []string{
+		e.errorFieldMessage(),
+		e.Message,
+		e.Msg,
+		e.Err,
+		e.ErrorMsg,
+		e.Detail,
+		e.Header.Message,
+		e.Response.Error.Message,
+	} {
+		if msg != "" {
+			return msg
+		}
 	}
 	return ""
 }

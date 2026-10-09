@@ -32,9 +32,9 @@ func callStub(t *testing.T, h gin.HandlerFunc) (int, map[string]string) {
 
 func TestStubsReturn501(t *testing.T) {
 	stubs := map[string]gin.HandlerFunc{
-		"GetStatus":      func(c gin.Context) { GetStatus(c) },
-		"GetAbout":       func(c gin.Context) { GetAbout(c) },
-		"ClearDiskCache": func(c gin.Context) { ClearDiskCache(c) },
+		"GetStatus": func(c gin.Context) { GetStatus(c) },
+		"GetAbout":  func(c gin.Context) { GetAbout(c) },
+		"GetNotice": func(c gin.Context) { GetNotice(c) },
 	}
 	for name, h := range stubs {
 		code, body := callStub(t, h)

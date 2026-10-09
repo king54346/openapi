@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"openapi/constant"
+	"openapi/common"
 
 	"github.com/andybalholm/brotli"
 	gin "github.com/king54346/gin-tiny"
@@ -31,7 +31,7 @@ func DecompressRequestMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		decoded, err := decodeRequestBody(c.Request().Body, encoding, maxDecompressBytes())
+		decoded, err := decodeRequestBody(c.Request().Body, encoding, common.MaxRequestBodyBytes()) // 解压后与请求体共用同一上限，防止压缩炸弹
 		if err != nil {
 			abortWithOpenAiMessage(c, http.StatusBadRequest, fmt.Sprintf("failed to decode %q request body: %v", encoding, err))
 			return
@@ -43,15 +43,6 @@ func DecompressRequestMiddleware() gin.HandlerFunc {
 		req.Header.Del("Content-Length")
 		c.Next()
 	}
-}
-
-// maxDecompressBytes 解压体积上限，与请求体上限保持一致，防止压缩炸弹。
-func maxDecompressBytes() int64 {
-	maxMB := constant.MaxRequestBodyMB
-	if maxMB <= 0 {
-		maxMB = 128
-	}
-	return int64(maxMB) << 20
 }
 
 // decodeRequestBody 按编码解压，超限时返回错误。

@@ -667,11 +667,11 @@ func (t *TaskSubmitReq) UnmarshalJSON(data []byte) error {
 func (t *TaskSubmitReq) UnmarshalMetadata(v any) error {
 	metadata := t.Metadata
 	if metadata != nil {
-		metadataBytes, err := json.Marshal(metadata)
+		metadataBytes, err := common.Marshal(metadata)
 		if err != nil {
 			return fmt.Errorf("marshal metadata failed: %w", err)
 		}
-		err = json.Unmarshal(metadataBytes, v)
+		err = common.Unmarshal(metadataBytes, v)
 		if err != nil {
 			return fmt.Errorf("unmarshal metadata to target failed: %w", err)
 		}

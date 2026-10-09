@@ -22,6 +22,7 @@ import (
 	"openapi/model"
 	"openapi/router"
 	"openapi/service"
+	"openapi/service/cron"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/glebarez/sqlite"
@@ -131,6 +132,12 @@ func InitResources() (*gorm.DB, error) {
 
 	service.InitHttpClient()
 
+	// 请求体磁盘缓存：读取配置，并清理上次异常退出残留的缓存文件
+	system.LoadDiskCacheConfigFromEnv()
+	if err := system.CleanupOldDiskCacheFiles(5 * time.Minute); err != nil {
+		common.SysError("failed to cleanup old disk cache files: " + err.Error())
+	}
+
 	db, err := openDB()
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
@@ -149,6 +156,14 @@ func InitResources() (*gorm.DB, error) {
 
 	// 异步任务（视频等）后台轮询；多实例部署时只在一个实例开启（UPDATE_TASK=true）
 	controller.StartTaskPolling()
+
+	// 通用定时任务（如 channel_test 定时测试渠道）；多实例部署时只在一个实例开启（CRON_ENABLED=true）
+	controller.RegisterCronExecutors()
+	if common.GetEnvOrDefaultBool("CRON_ENABLED", true) {
+		cron.StartScheduler()
+	} else {
+		common.SysLog("cron scheduler disabled (CRON_ENABLED=false)")
+	}
 
 	// Redis：REDIS_CONN_STRING 或 REDIS_ADDR 都未配置时保持禁用，走内存限流
 	if err := common.InitRedisClient(); err != nil {

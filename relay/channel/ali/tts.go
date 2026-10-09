@@ -2,7 +2,6 @@ package ali
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -75,7 +74,7 @@ func convertAudioToAliMultimodalTTS(request dto.AudioRequest) (io.Reader, error)
 		},
 	}
 
-	jsonData, err := json.Marshal(ttsReq)
+	jsonData, err := common.Marshal(ttsReq)
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling TTS request: %w", err)
 	}

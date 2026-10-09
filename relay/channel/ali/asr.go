@@ -3,7 +3,6 @@ package ali
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -131,7 +130,7 @@ func convertAudioToAliChatASR(c gin.Context, info *relaycommon.RelayInfo, reques
 		},
 	}
 
-	jsonData, err := json.Marshal(asrReq)
+	jsonData, err := common.Marshal(asrReq)
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling ASR request: %w", err)
 	}
@@ -171,7 +170,7 @@ func aliChatASRResponseHandler(c gin.Context, resp *http.Response, info *relayco
 
 	// 转换为标准 STT 响应格式 {"text": "..."}
 	sttResponse := dto.AudioResponse{Text: text}
-	sttBody, err := json.Marshal(sttResponse)
+	sttBody, err := common.Marshal(sttResponse)
 	if err != nil {
 		return types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError), nil
 	}

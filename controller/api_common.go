@@ -29,35 +29,9 @@ func apiError(c gin.Context, err error) {
 	apiErrorMsg(c, "internal error, please check server logs")
 }
 
-const (
-	defaultPageSize = 10
-	maxPageSize     = 100
-)
-
-// pageQuery 解析分页参数 p（从 1 开始）与 page_size。
-type pageQuery struct {
-	Page     int
-	PageSize int
-}
-
-func getPageQuery(c gin.Context) pageQuery {
-	page, _ := strconv.Atoi(c.Query("p"))
-	if page < 1 {
-		page = 1
-	}
-	size, _ := strconv.Atoi(c.Query("page_size"))
-	if size <= 0 {
-		size = defaultPageSize
-	}
-	if size > maxPageSize {
-		size = maxPageSize
-	}
-	return pageQuery{Page: page, PageSize: size}
-}
-
-func (p pageQuery) offset() int { return (p.Page - 1) * p.PageSize }
-
-func (p pageQuery) result(items any, total int64) gin.H {
+// pageResult 分页接口的统一返回体，调用方可追加字段（如 type_counts）。
+// 分页参数由 common.GetPageQuery 解析。
+func pageResult(p *common.PageInfo, items any, total int64) gin.H {
 	return gin.H{"items": items, "total": total, "page": p.Page, "page_size": p.PageSize}
 }
 

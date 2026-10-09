@@ -2,8 +2,10 @@ package model
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"openapi/common"
@@ -328,11 +330,11 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	// 只统计最近60秒的rpm和tpm
 	rpmTpmQuery = rpmTpmQuery.Where("created_at >= ?", time.Now().Add(-60*time.Second).Unix())
 
-	// 执行查询
-	tx.Scan(&stat)
-	rpmTpmQuery.Scan(&stat)
-
-	return stat
+	// 两个查询分别扫描再合并：扫描到同一个结构体时，后一次会把前一次的 quota 覆盖成 0
+	var quotaStat, rateStat Stat
+	tx.Scan(&quotaStat)
+	rpmTpmQuery.Scan(&rateStat)
+	return Stat{Quota: quotaStat.Quota, Rpm: rateStat.Rpm, Tpm: rateStat.Tpm}
 }
 
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) (token int) {
@@ -492,4 +494,27 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 	}
 
 	return total, nil
+}
+
+// GetLogByKey 按令牌 key（可带 sk- 前缀）查询该令牌的日志，可按 request_id 过滤，最多返回最近 MaxRecentItems 条。
+func GetLogByKey(key, requestId string) ([]*Log, error) {
+	key = strings.TrimPrefix(strings.TrimSpace(key), "sk-")
+	if key == "" {
+		return nil, ErrTokenEmpty
+	}
+	var token Token
+	if err := DB.Select("id").Where(commonKeyCol+" = ?", key).First(&token).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTokenInvalid
+		}
+		return nil, err
+	}
+	query := LOG_DB.Where("token_id = ?", token.Id)
+	if requestId != "" {
+		query = query.Where("request_id = ?", requestId)
+	}
+	var logs []*Log
+	err := query.Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
+	formatUserLogs(logs)
+	return logs, err
 }

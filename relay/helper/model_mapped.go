@@ -1,13 +1,13 @@
 package helper
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
+	"openapi/common"
 	"openapi/dto"
-	"openapi/relay/common"
+	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
 
 	gin "github.com/king54346/gin-tiny"
@@ -23,9 +23,9 @@ func withCompactModelSuffix(modelName string) string {
 	return modelName + CompactModelSuffix
 }
 
-func ModelMappedHelper(c gin.Context, info *common.RelayInfo, request dto.Request) error {
+func ModelMappedHelper(c gin.Context, info *relaycommon.RelayInfo, request dto.Request) error {
 	if info.ChannelMeta == nil {
-		info.ChannelMeta = &common.ChannelMeta{}
+		info.ChannelMeta = &relaycommon.ChannelMeta{}
 	}
 
 	isResponsesCompact := info.RelayMode == relayconstant.RelayModeResponsesCompact
@@ -61,7 +61,7 @@ func ResolveModelMapping(originModelName string, modelMapping string, isResponse
 		return mappingModelName, false, nil
 	}
 	modelMap := make(map[string]string)
-	if err := json.Unmarshal([]byte(modelMapping), &modelMap); err != nil {
+	if err := common.Unmarshal([]byte(modelMapping), &modelMap); err != nil {
 		return "", false, fmt.Errorf("unmarshal_model_mapping_failed")
 	}
 

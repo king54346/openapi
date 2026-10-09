@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"net"
 	"net/url"
 	"regexp"
@@ -37,7 +36,7 @@ func GetRandomString(length int) string {
 }
 
 func MapToJsonStr(m map[string]interface{}) string {
-	bytes, err := json.Marshal(m)
+	bytes, err := Marshal(m)
 	if err != nil {
 		return ""
 	}
@@ -55,7 +54,7 @@ func StrToMap(str string) (map[string]interface{}, error) {
 
 func StrToJsonArray(str string) ([]interface{}, error) {
 	var js []interface{}
-	err := json.Unmarshal([]byte(str), &js)
+	err := Unmarshal([]byte(str), &js)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +67,7 @@ func IsJsonArray(str string) bool {
 		return false
 	}
 	var js []interface{}
-	return json.Unmarshal([]byte(str), &js) == nil
+	return Unmarshal([]byte(str), &js) == nil
 }
 
 func IsJsonObject(str string) bool {
@@ -77,7 +76,7 @@ func IsJsonObject(str string) bool {
 		return false
 	}
 	var js map[string]interface{}
-	return json.Unmarshal([]byte(str), &js) == nil
+	return Unmarshal([]byte(str), &js) == nil
 }
 
 func String2Int(str string) int {
@@ -97,11 +96,9 @@ func StringsContains(strs []string, str string) bool {
 	return false
 }
 
-// StringToByteSlice []byte only read, panic on append
+// StringToByteSlice 零拷贝把字符串转成 []byte，返回的切片只读，不能修改或 append。
 func StringToByteSlice(s string) []byte {
-	tmp1 := (*[2]uintptr)(unsafe.Pointer(&s))
-	tmp2 := [3]uintptr{tmp1[0], tmp1[1], tmp1[1]}
-	return *(*[]byte)(unsafe.Pointer(&tmp2))
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 func EncodeBase64(str string) string {
@@ -112,7 +109,7 @@ func GetJsonString(data any) string {
 	if data == nil {
 		return ""
 	}
-	b, _ := json.Marshal(data)
+	b, _ := Marshal(data)
 	return string(b)
 }
 

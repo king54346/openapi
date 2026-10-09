@@ -116,22 +116,22 @@ func parseTaskQuery(c gin.Context) model.SyncTaskQueryParams {
 
 // GetAllTask 管理员查询所有任务，额外支持 channel_id 筛选。
 func GetAllTask(c gin.Context) {
-	page := getPageQuery(c)
+	page := common.GetPageQuery(c)
 	params := parseTaskQuery(c)
 	params.ChannelID = c.Query("channel_id")
-	items := model.TaskGetAllTasks(page.offset(), page.PageSize, params)
+	items := model.TaskGetAllTasks(page.GetStartIdx(), page.GetPageSize(), params)
 	total := model.TaskCountAllTasks(params)
-	apiSuccess(c, page.result(items, total))
+	apiSuccess(c, pageResult(page, items, total))
 }
 
 // GetUserTask 用户查询自己的任务。
 func GetUserTask(c gin.Context) {
-	page := getPageQuery(c)
+	page := common.GetPageQuery(c)
 	userId := c.GetInt("id")
 	params := parseTaskQuery(c)
-	items := model.TaskGetAllUserTask(userId, page.offset(), page.PageSize, params)
+	items := model.TaskGetAllUserTask(userId, page.GetStartIdx(), page.GetPageSize(), params)
 	total := model.TaskCountAllUserTask(userId, params)
-	apiSuccess(c, page.result(items, total))
+	apiSuccess(c, pageResult(page, items, total))
 }
 
 // taskPollingEnabled 是否启动后台任务轮询（多实例部署时只需一个实例开启）。

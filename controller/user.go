@@ -127,24 +127,24 @@ func GenerateAccessToken(c gin.Context) {
 
 // GetAllUsers 分页列出用户。
 func GetAllUsers(c gin.Context) {
-	page := getPageQuery(c)
-	users, total, err := model.GetAllUsers(page.offset(), page.PageSize)
+	page := common.GetPageQuery(c)
+	users, total, err := model.GetAllUsers(page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, page.result(users, total))
+	apiSuccess(c, pageResult(page, users, total))
 }
 
 // SearchUsers 按 keyword（id/用户名/显示名/邮箱）与 group 搜索用户。
 func SearchUsers(c gin.Context) {
-	page := getPageQuery(c)
-	users, total, err := model.SearchUsers(c.Query("keyword"), c.Query("group"), page.offset(), page.PageSize)
+	page := common.GetPageQuery(c)
+	users, total, err := model.SearchUsers(c.Query("keyword"), c.Query("group"), page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, page.result(users, total))
+	apiSuccess(c, pageResult(page, users, total))
 }
 
 // loadManagedUser 取 id 对应用户并校验当前管理员有权操作，失败时已写回错误。

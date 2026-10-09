@@ -2,7 +2,6 @@ package relay
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -62,7 +61,7 @@ func RelayTaskSubmit(c gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.T
 				info.OriginModelName = originTask.Properties.UpstreamModelName
 			} else {
 				var taskData map[string]interface{}
-				_ = json.Unmarshal(originTask.Data, &taskData)
+				_ = common.Unmarshal(originTask.Data, &taskData)
 				if m, ok := taskData["model"].(string); ok && m != "" {
 					info.OriginModelName = m
 					platform = originTask.Platform
@@ -219,7 +218,7 @@ func videoFetchByIDRespBodyBuilder(c gin.Context) (respBody []byte, taskResp *dt
 		return openAIVideoData, nil
 	}
 
-	respBody, err = json.Marshal(dto.TaskResponse[any]{
+	respBody, err = common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
 		Data: TaskModel2Dto(originTask),
 	})

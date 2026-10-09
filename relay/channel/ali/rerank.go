@@ -1,10 +1,10 @@
 package ali
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 
+	"openapi/common"
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
 	"openapi/service"
@@ -40,7 +40,7 @@ func RerankHandler(c gin.Context, resp *http.Response, info *relaycommon.RelayIn
 	service.CloseResponseBodyGracefully(resp)
 
 	var aliResponse AliRerankResponse
-	err = json.Unmarshal(responseBody, &aliResponse)
+	err = common.Unmarshal(responseBody, &aliResponse)
 	if err != nil {
 		return types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError), nil
 	}
@@ -64,7 +64,7 @@ func RerankHandler(c gin.Context, resp *http.Response, info *relaycommon.RelayIn
 		Usage:   usage,
 	}
 
-	jsonResponse, err := json.Marshal(rerankResponse)
+	jsonResponse, err := common.Marshal(rerankResponse)
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeBadResponseBody), nil
 	}

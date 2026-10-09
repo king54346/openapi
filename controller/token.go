@@ -20,13 +20,13 @@ const maxTokenNameLength = 50
 
 // GetAllTokens 分页列出当前用户的令牌。
 func GetAllTokens(c gin.Context) {
-	page := getPageQuery(c)
-	tokens, total, err := model.GetUserTokens(c.GetInt("id"), page.offset(), page.PageSize)
+	page := common.GetPageQuery(c)
+	tokens, total, err := model.GetUserTokens(c.GetInt("id"), page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, page.result(tokens, total))
+	apiSuccess(c, pageResult(page, tokens, total))
 }
 
 // SearchTokens 按名称（keyword）或 key（token）搜索当前用户的令牌。

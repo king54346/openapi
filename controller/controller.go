@@ -63,21 +63,6 @@ func ClearChannelTestRecords(c gin.Context) {
 	notImplemented(c, "ClearChannelTestRecords", "")
 }
 
-// ClearDiskCache（桩实现：501）。
-func ClearDiskCache(c gin.Context) {
-	notImplemented(c, "ClearDiskCache", "")
-}
-
-// CreateCronJob（桩实现：501）。
-func CreateCronJob(c gin.Context) {
-	notImplemented(c, "CreateCronJob", "")
-}
-
-// CreateModelMeta（桩实现：501）。
-func CreateModelMeta(c gin.Context) {
-	notImplemented(c, "CreateModelMeta", "")
-}
-
 // CreatePrefillGroup（桩实现：501）。
 func CreatePrefillGroup(c gin.Context) {
 	notImplemented(c, "CreatePrefillGroup", "")
@@ -91,21 +76,6 @@ func CreateVendorMeta(c gin.Context) {
 // DeleteChannelTestRecords（桩实现：501）。
 func DeleteChannelTestRecords(c gin.Context) {
 	notImplemented(c, "DeleteChannelTestRecords", "")
-}
-
-// DeleteCronJob（桩实现：501）。
-func DeleteCronJob(c gin.Context) {
-	notImplemented(c, "DeleteCronJob", "")
-}
-
-// DeleteHistoryLogs（桩实现：501）。
-func DeleteHistoryLogs(c gin.Context) {
-	notImplemented(c, "DeleteHistoryLogs", "")
-}
-
-// DeleteModelMeta（桩实现：501）。
-func DeleteModelMeta(c gin.Context) {
-	notImplemented(c, "DeleteModelMeta", "")
 }
 
 // DeletePrefillGroup（桩实现：501）。
@@ -143,24 +113,9 @@ func FixChannelsAbilities(c gin.Context) {
 	notImplemented(c, "FixChannelsAbilities", "")
 }
 
-// ForceGC（桩实现：501）。
-func ForceGC(c gin.Context) {
-	notImplemented(c, "ForceGC", "")
-}
-
 // GetAbout（桩实现：501）。
 func GetAbout(c gin.Context) {
 	notImplemented(c, "GetAbout", "")
-}
-
-// GetAllLogs（桩实现：501）。
-func GetAllLogs(c gin.Context) {
-	notImplemented(c, "GetAllLogs", "")
-}
-
-// GetAllModelsMeta（桩实现：501）。
-func GetAllModelsMeta(c gin.Context) {
-	notImplemented(c, "GetAllModelsMeta", "")
 }
 
 // GetAllTopUps（桩实现：501）。
@@ -188,26 +143,6 @@ func GetChannelTestRecords(c gin.Context) {
 	notImplemented(c, "GetChannelTestRecords", "")
 }
 
-// GetCronJob（桩实现：501）。
-func GetCronJob(c gin.Context) {
-	notImplemented(c, "GetCronJob", "")
-}
-
-// GetCronJobRuns（桩实现：501）。
-func GetCronJobRuns(c gin.Context) {
-	notImplemented(c, "GetCronJobRuns", "")
-}
-
-// GetCronJobTypes（桩实现：501）。
-func GetCronJobTypes(c gin.Context) {
-	notImplemented(c, "GetCronJobTypes", "")
-}
-
-// GetCronJobs（桩实现：501）。
-func GetCronJobs(c gin.Context) {
-	notImplemented(c, "GetCronJobs", "")
-}
-
 // GetGroups（桩实现：501）。
 func GetGroups(c gin.Context) {
 	notImplemented(c, "GetGroups", "")
@@ -218,34 +153,9 @@ func GetHomePageContent(c gin.Context) {
 	notImplemented(c, "GetHomePageContent", "")
 }
 
-// GetLogByKey（桩实现：501）。
-func GetLogByKey(c gin.Context) {
-	notImplemented(c, "GetLogByKey", "")
-}
-
-// GetLogsSelfStat（桩实现：501）。
-func GetLogsSelfStat(c gin.Context) {
-	notImplemented(c, "GetLogsSelfStat", "")
-}
-
-// GetLogsStat（桩实现：501）。
-func GetLogsStat(c gin.Context) {
-	notImplemented(c, "GetLogsStat", "")
-}
-
 // GetMissingModels（桩实现：501）。
 func GetMissingModels(c gin.Context) {
 	notImplemented(c, "GetMissingModels", "")
-}
-
-// GetModelMeta（桩实现：501）。
-func GetModelMeta(c gin.Context) {
-	notImplemented(c, "GetModelMeta", "")
-}
-
-// GetModelTags（桩实现：501）。
-func GetModelTags(c gin.Context) {
-	notImplemented(c, "GetModelTags", "")
 }
 
 // GetNotice（桩实现：501）。
@@ -263,11 +173,6 @@ func GetPeakValleyTimeInfo(c gin.Context) {
 	notImplemented(c, "GetPeakValleyTimeInfo", "")
 }
 
-// GetPerformanceStats（桩实现：501）。
-func GetPerformanceStats(c gin.Context) {
-	notImplemented(c, "GetPerformanceStats", "")
-}
-
 // GetPrefillGroups（桩实现：501）。
 func GetPrefillGroups(c gin.Context) {
 	notImplemented(c, "GetPrefillGroups", "")
@@ -281,11 +186,6 @@ func GetPricing(c gin.Context) {
 // GetPrivacyPolicy（桩实现：501）。
 func GetPrivacyPolicy(c gin.Context) {
 	notImplemented(c, "GetPrivacyPolicy", "")
-}
-
-// GetPublicSkill（桩实现：501）。
-func GetPublicSkill(c gin.Context) {
-	notImplemented(c, "GetPublicSkill", "")
 }
 
 // GetRatioConfig（桩实现：501）。
@@ -343,11 +243,6 @@ func GetUserGroups(c gin.Context) {
 	notImplemented(c, "GetUserGroups", "")
 }
 
-// GetUserLogs（桩实现：501）。
-func GetUserLogs(c gin.Context) {
-	notImplemented(c, "GetUserLogs", "")
-}
-
 // GetUserModels（桩实现：501）。
 func GetUserModels(c gin.Context) {
 	notImplemented(c, "GetUserModels", "")
@@ -366,11 +261,6 @@ func GetVendorMeta(c gin.Context) {
 // GetVerificationStatus（桩实现：501）。
 func GetVerificationStatus(c gin.Context) {
 	notImplemented(c, "GetVerificationStatus", "")
-}
-
-// ListPublicSkills（桩实现：501）。
-func ListPublicSkills(c gin.Context) {
-	notImplemented(c, "ListPublicSkills", "")
 }
 
 // MigrateConsoleSetting（桩实现：501）。
@@ -433,11 +323,6 @@ func ResetModelRatio(c gin.Context) {
 	notImplemented(c, "ResetModelRatio", "")
 }
 
-// ResetPerformanceStats（桩实现：501）。
-func ResetPerformanceStats(c gin.Context) {
-	notImplemented(c, "ResetPerformanceStats", "")
-}
-
 // RetestChannelModel（桩实现：501）。
 func RetestChannelModel(c gin.Context) {
 	notImplemented(c, "RetestChannelModel", "")
@@ -446,26 +331,6 @@ func RetestChannelModel(c gin.Context) {
 // RetestFilteredRecords（桩实现：501）。
 func RetestFilteredRecords(c gin.Context) {
 	notImplemented(c, "RetestFilteredRecords", "")
-}
-
-// RunCronJobNow（桩实现：501）。
-func RunCronJobNow(c gin.Context) {
-	notImplemented(c, "RunCronJobNow", "")
-}
-
-// SearchAllLogs（桩实现：501）。
-func SearchAllLogs(c gin.Context) {
-	notImplemented(c, "SearchAllLogs", "")
-}
-
-// SearchModelsMeta（桩实现：501）。
-func SearchModelsMeta(c gin.Context) {
-	notImplemented(c, "SearchModelsMeta", "")
-}
-
-// SearchUserLogs（桩实现：501）。
-func SearchUserLogs(c gin.Context) {
-	notImplemented(c, "SearchUserLogs", "")
 }
 
 // SearchVendors（桩实现：501）。
@@ -488,11 +353,6 @@ func TestAllChannels(c gin.Context) {
 	notImplemented(c, "TestAllChannels", "")
 }
 
-// TestChannel（桩实现：501）。
-func TestChannel(c gin.Context) {
-	notImplemented(c, "TestChannel", "")
-}
-
 // TestChannelAllModels（桩实现：501）。
 func TestChannelAllModels(c gin.Context) {
 	notImplemented(c, "TestChannelAllModels", "")
@@ -501,16 +361,6 @@ func TestChannelAllModels(c gin.Context) {
 // TestStatus（桩实现：501）。
 func TestStatus(c gin.Context) {
 	notImplemented(c, "TestStatus", "")
-}
-
-// ToggleCronJob（桩实现：501）。
-func ToggleCronJob(c gin.Context) {
-	notImplemented(c, "ToggleCronJob", "")
-}
-
-// TokenLog（桩实现：501）。
-func TokenLog(c gin.Context) {
-	notImplemented(c, "TokenLog", "")
 }
 
 // UniversalVerify（桩实现：501）。
@@ -526,16 +376,6 @@ func UpdateAllChannelsBalance(c gin.Context) {
 // UpdateChannelBalance（桩实现：501）。
 func UpdateChannelBalance(c gin.Context) {
 	notImplemented(c, "UpdateChannelBalance", "")
-}
-
-// UpdateCronJob（桩实现：501）。
-func UpdateCronJob(c gin.Context) {
-	notImplemented(c, "UpdateCronJob", "")
-}
-
-// UpdateModelMeta（桩实现：501）。
-func UpdateModelMeta(c gin.Context) {
-	notImplemented(c, "UpdateModelMeta", "")
 }
 
 // UpdateOption（桩实现：501）。

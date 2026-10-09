@@ -419,7 +419,7 @@ func moveValue(jsonStr, fromPath, toPath string) (string, error) {
 		return jsonStr, fmt.Errorf("source path does not exist: %s", fromPath)
 	}
 	var raw json.RawMessage
-	if err := json.Unmarshal([]byte(sourceValue.Raw), &raw); err != nil || len(raw) == 0 {
+	if err := common.Unmarshal([]byte(sourceValue.Raw), &raw); err != nil || len(raw) == 0 {
 		result, err := sjson.Set(jsonStr, toPath, sourceValue.Value())
 		if err != nil {
 			return "", err

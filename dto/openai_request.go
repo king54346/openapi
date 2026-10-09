@@ -394,14 +394,14 @@ func (m *Message) ParseToolCalls() []ToolCallRequest {
 		return nil
 	}
 	var toolCalls []ToolCallRequest
-	if err := json.Unmarshal(m.ToolCalls, &toolCalls); err == nil {
+	if err := common.Unmarshal(m.ToolCalls, &toolCalls); err == nil {
 		return toolCalls
 	}
 	return toolCalls
 }
 
 func (m *Message) SetToolCalls(toolCalls any) {
-	toolCallsJson, _ := json.Marshal(toolCalls)
+	toolCallsJson, _ := common.Marshal(toolCalls)
 	m.ToolCalls = toolCallsJson
 }
 
@@ -591,7 +591,7 @@ func (m *Message) ParseContent() []MediaContent {
 	}
 
 	var stringContent string
-	if err := json.Unmarshal(m.Content, &stringContent); err == nil {
+	if err := common.Unmarshal(m.Content, &stringContent); err == nil {
 		m.parsedStringContent = &stringContent
 		return stringContent
 	}
@@ -616,14 +616,14 @@ func (m *Message) SetNullContent() {
 }
 
 func (m *Message) SetStringContent(content string) {
-	jsonContent, _ := json.Marshal(content)
+	jsonContent, _ := common.Marshal(content)
 	m.Content = jsonContent
 	m.parsedStringContent = &content
 	m.parsedContent = nil
 }
 
 func (m *Message) SetMediaContent(content []MediaContent) {
-	jsonContent, _ := json.Marshal(content)
+	jsonContent, _ := common.Marshal(content)
 	m.Content = jsonContent
 	m.parsedContent = nil
 	m.parsedStringContent = nil
@@ -634,7 +634,7 @@ func (m *Message) IsStringContent() bool {
 		return true
 	}
 	var stringContent string
-	if err := json.Unmarshal(m.Content, &stringContent); err == nil {
+	if err := common.Unmarshal(m.Content, &stringContent); err == nil {
 		m.parsedStringContent = &stringContent
 		return true
 	}
@@ -650,7 +650,7 @@ func (m *Message) ParseContent() []MediaContent {
 
 	// 先尝试解析为字符串
 	var stringContent string
-	if err := json.Unmarshal(m.Content, &stringContent); err == nil {
+	if err := common.Unmarshal(m.Content, &stringContent); err == nil {
 		contentList = []MediaContent{{
 			Type: ContentTypeText,
 			Text: stringContent,
@@ -661,7 +661,7 @@ func (m *Message) ParseContent() []MediaContent {
 
 	// 尝试解析为数组
 	var arrayContent []map[string]interface{}
-	if err := json.Unmarshal(m.Content, &arrayContent); err == nil {
+	if err := common.Unmarshal(m.Content, &arrayContent); err == nil {
 		for _, contentItem := range arrayContent {
 			contentType, ok := contentItem["type"].(string)
 			if !ok {
@@ -887,96 +887,90 @@ type MediaInput struct {
 	Detail   string `json:"detail,omitempty"` // 仅 input_image 有效
 }
 
-// ParseInput parses the Responses API `input` field into a normalized slice of MediaInput.
-// Reference implementation mirrors Message.ParseContent:
-//   - input can be a string, treated as an input_text item
-//   - input can be an array of objects with a `type` field
-//     supported types: input_text, input_image, input_file
+// ParseInput 把 Responses API 的 input 字段统一解析为 MediaInput 列表：
+//   - input 为字符串：整体作为一条 input_text
+//   - input 为消息数组：逐条解析 content，content 可以是字符串，或由 input_text / input_image / input_file 组成的数组
+//
+// 格式不对的元素会被跳过，不影响其他元素。
 func (r *OpenAIResponsesRequest) ParseInput() []MediaInput {
-	if r.Input == nil {
-		return nil
-	}
-
-	var mediaInputs []MediaInput
-
-	// Try string first
-	// if str, ok := common.GetJsonType(r.Input); ok {
-	// 	inputs = append(inputs, MediaInput{Type: "input_text", Text: str})
-	// 	return inputs
-	// }
-	if common.GetJsonType(r.Input) == "string" {
-		var str string
-		_ = common.Unmarshal(r.Input, &str)
-		mediaInputs = append(mediaInputs, MediaInput{Type: "input_text", Text: str})
-		return mediaInputs
-	}
-
-	// Try array of parts
-	if common.GetJsonType(r.Input) == "array" {
-		var inputs []Input
-		_ = common.Unmarshal(r.Input, &inputs)
-		for _, input := range inputs {
-			if common.GetJsonType(input.Content) == "string" {
-				var str string
-				_ = common.Unmarshal(input.Content, &str)
-				mediaInputs = append(mediaInputs, MediaInput{Type: "input_text", Text: str})
-			}
-
-			if common.GetJsonType(input.Content) == "array" {
-				var array []any
-				_ = common.Unmarshal(input.Content, &array)
-				for _, itemAny := range array {
-					// Already parsed MediaContent
-					if media, ok := itemAny.(MediaInput); ok {
-						mediaInputs = append(mediaInputs, media)
-						continue
-					}
-
-					// Generic map
-					item, ok := itemAny.(map[string]any)
-					if !ok {
-						continue
-					}
-
-					typeVal, ok := item["type"].(string)
-					if !ok {
-						continue
-					}
-					switch typeVal {
-					case "input_text":
-						text, _ := item["text"].(string)
-						mediaInputs = append(mediaInputs, MediaInput{Type: "input_text", Text: text})
-					case "input_image":
-						// image_url may be string or object with url field
-						var imageUrl string
-						switch v := item["image_url"].(type) {
-						case string:
-							imageUrl = v
-						case map[string]any:
-							if url, ok := v["url"].(string); ok {
-								imageUrl = url
-							}
-						}
-						mediaInputs = append(mediaInputs, MediaInput{Type: "input_image", ImageUrl: imageUrl})
-					case "input_file":
-						// file_url may be string or object with url field
-						var fileUrl string
-						switch v := item["file_url"].(type) {
-						case string:
-							fileUrl = v
-						case map[string]any:
-							if url, ok := v["url"].(string); ok {
-								fileUrl = url
-							}
-						}
-						mediaInputs = append(mediaInputs, MediaInput{Type: "input_file", FileUrl: fileUrl})
-					}
-				}
+	switch common.JSONKindOf(r.Input) {
+	case common.JSONString:
+		if text, ok := common.DecodeJSONString(r.Input); ok {
+			return []MediaInput{{Type: "input_text", Text: text}}
+		}
+	case common.JSONArray:
+		var mediaInputs []MediaInput
+		for _, raw := range jsonArrayElements(r.Input) {
+			var input Input
+			if common.Unmarshal(raw, &input) == nil {
+				mediaInputs = append(mediaInputs, parseResponsesContent(input.Content)...)
 			}
 		}
+		return mediaInputs
 	}
+	return nil
+}
 
-	return mediaInputs
+// responsesContentPart Responses 输入消息中的一个内容片段，image_url / file_url 可能是字符串或 {"url": "..."}
+type responsesContentPart struct {
+	Type     string          `json:"type"`
+	Text     string          `json:"text"`
+	ImageURL json.RawMessage `json:"image_url"`
+	FileURL  json.RawMessage `json:"file_url"`
+}
+
+// parseResponsesContent 解析一条消息的 content，未知类型的片段忽略。
+func parseResponsesContent(content json.RawMessage) []MediaInput {
+	switch common.JSONKindOf(content) {
+	case common.JSONString:
+		if text, ok := common.DecodeJSONString(content); ok {
+			return []MediaInput{{Type: "input_text", Text: text}}
+		}
+	case common.JSONArray:
+		var mediaInputs []MediaInput
+		for _, raw := range jsonArrayElements(content) {
+			var part responsesContentPart
+			if common.Unmarshal(raw, &part) != nil {
+				continue
+			}
+			switch part.Type {
+			case "input_text":
+				mediaInputs = append(mediaInputs, MediaInput{Type: "input_text", Text: part.Text})
+			case "input_image":
+				mediaInputs = append(mediaInputs, MediaInput{Type: "input_image", ImageUrl: urlFromStringOrObject(part.ImageURL)})
+			case "input_file":
+				mediaInputs = append(mediaInputs, MediaInput{Type: "input_file", FileUrl: urlFromStringOrObject(part.FileURL)})
+			}
+		}
+		return mediaInputs
+	}
+	return nil
+}
+
+// jsonArrayElements 把 JSON 数组拆成各元素的原始文本，便于逐个解析、跳过格式不对的元素。
+func jsonArrayElements(data json.RawMessage) []json.RawMessage {
+	var elements []json.RawMessage
+	if common.Unmarshal(data, &elements) != nil {
+		return nil
+	}
+	return elements
+}
+
+// urlFromStringOrObject 取 URL 字段：可以是字符串，也可以是 {"url": "..."} 对象。
+func urlFromStringOrObject(raw json.RawMessage) string {
+	switch common.JSONKindOf(raw) {
+	case common.JSONString:
+		url, _ := common.DecodeJSONString(raw)
+		return url
+	case common.JSONObject:
+		var v struct {
+			URL string `json:"url"`
+		}
+		if common.Unmarshal(raw, &v) == nil {
+			return v.URL
+		}
+	}
+	return ""
 }
 
 // Thinking 是 Anthropic 风格的 thinking 参数，通过 OpenRouter 调用 anthropic/* 模型时转换为 reasoning

@@ -24,34 +24,29 @@ import (
 // 渠道 key 只通过 GetChannelKey（root）返回，其余接口一律不输出。
 
 // parseStatusFilter status 参数：enabled/1 只看启用，disabled/0 只看禁用（含手动与自动），其余不过滤。
-func parseStatusFilter(statusParam string) int {
+func parseStatusFilter(statusParam string) model.ChannelStatusFilter {
 	switch strings.ToLower(statusParam) {
 	case "enabled", "1":
-		return common.ChannelStatusEnabled
+		return model.ChannelStatusOnlyEnabled
 	case "disabled", "0":
-		return 0
+		return model.ChannelStatusOnlyDisabled
 	default:
-		return -1
+		return model.ChannelStatusAny
 	}
 }
 
-// matchStatus 渠道是否满足状态过滤条件。
-func matchStatus(ch *model.Channel, statusFilter int) bool {
-	switch statusFilter {
-	case common.ChannelStatusEnabled:
-		return ch.Status == common.ChannelStatusEnabled
-	case 0:
-		return ch.Status != common.ChannelStatusEnabled
+// parseChannelFilter 解析渠道列表 / 搜索的筛选参数：keyword、group、model、status、type、id_sort。
+func parseChannelFilter(c gin.Context) model.ChannelFilter {
+	channelType, _ := strconv.Atoi(c.Query("type"))
+	idSort, _ := strconv.ParseBool(c.Query("id_sort"))
+	return model.ChannelFilter{
+		Keyword: c.Query("keyword"),
+		Group:   c.Query("group"),
+		Model:   c.Query("model"),
+		Status:  parseStatusFilter(c.Query("status")),
+		Type:    channelType,
+		IdSort:  idSort,
 	}
-	return true
-}
-
-// parseTypeFilter type 参数，未传或非法时返回 -1（不过滤）。
-func parseTypeFilter(typeParam string) int {
-	if t, err := strconv.Atoi(typeParam); err == nil {
-		return t
-	}
-	return -1
 }
 
 // clearChannelInfo 列表与详情不输出多 key 的禁用原因与时间（可能含上游报错细节）。
@@ -63,146 +58,46 @@ func clearChannelInfo(channel *model.Channel) {
 	}
 }
 
-// channelTypeCounts 按渠道类型统计数量（受状态过滤影响，不受类型过滤影响）。
-func channelTypeCounts(statusFilter int) map[int64]int64 {
-	query := model.DB.Model(&model.Channel{})
-	switch statusFilter {
-	case common.ChannelStatusEnabled:
-		query = query.Where("status = ?", common.ChannelStatusEnabled)
-	case 0:
-		query = query.Where("status <> ?", common.ChannelStatusEnabled)
-	}
-	var rows []struct {
-		Type  int64
-		Count int64
-	}
-	_ = query.Select("type, count(*) as count").Group("type").Find(&rows).Error
-	counts := make(map[int64]int64, len(rows))
-	for _, r := range rows {
-		counts[r.Type] = r.Count
-	}
-	return counts
-}
-
-// GetAllChannels 分页列出渠道。
-// 参数：p、page_size、id_sort、status（enabled/disabled）、type；tag_mode=true 时按标签分页，返回各标签下的全部渠道。
+// GetAllChannels 分页列出渠道，筛选、计数、分页都在数据库完成。
+// 参数：p、page_size、keyword（id/名称/base_url/完整 key）、group、model、status（enabled/disabled）、type、id_sort；
+// tag_mode=true 时按标签分页（total 为标签数），返回当页各标签下满足条件的全部渠道。
+// 额外返回 type_counts：满足除 type 外其余条件的渠道按类型计数。
 func GetAllChannels(c gin.Context) {
-	page := getPageQuery(c)
-	idSort, _ := strconv.ParseBool(c.Query("id_sort"))
+	page := common.GetPageQuery(c)
+	filter := parseChannelFilter(c)
 	tagMode, _ := strconv.ParseBool(c.Query("tag_mode"))
-	statusFilter := parseStatusFilter(c.Query("status"))
-	typeFilter := parseTypeFilter(c.Query("type"))
-
-	channels := make([]*model.Channel, 0)
-	var total int64
-	if tagMode {
-		tags, err := model.GetPaginatedTags(page.offset(), page.PageSize)
-		if err != nil {
-			apiError(c, err)
-			return
-		}
-		for _, tag := range tags {
-			if tag == nil || *tag == "" {
-				continue
-			}
-			tagChannels, err := model.GetChannelsByTag(*tag, idSort, false)
-			if err != nil {
-				continue
-			}
-			for _, ch := range tagChannels {
-				if matchStatus(ch, statusFilter) && (typeFilter < 0 || ch.Type == typeFilter) {
-					channels = append(channels, ch)
-				}
-			}
-		}
-		total, _ = model.CountAllTags()
-	} else {
-		query := model.DB.Model(&model.Channel{})
-		if typeFilter >= 0 {
-			query = query.Where("type = ?", typeFilter)
-		}
-		switch statusFilter {
-		case common.ChannelStatusEnabled:
-			query = query.Where("status = ?", common.ChannelStatusEnabled)
-		case 0:
-			query = query.Where("status <> ?", common.ChannelStatusEnabled)
-		}
-		if err := query.Count(&total).Error; err != nil {
-			apiError(c, err)
-			return
-		}
-		order := "priority desc, id desc"
-		if idSort {
-			order = "id desc"
-		}
-		if err := query.Order(order).Limit(page.PageSize).Offset(page.offset()).Omit("key").Find(&channels).Error; err != nil {
-			apiError(c, err)
-			return
-		}
-	}
-	for _, ch := range channels {
-		clearChannelInfo(ch)
-	}
-	result := page.result(channels, total)
-	result["type_counts"] = channelTypeCounts(statusFilter)
-	apiSuccess(c, result)
-}
-
-// SearchChannels 按 keyword（id/名称/base_url/完整 key）、group、model 搜索渠道，结果在内存中按状态、类型过滤并分页。
-// tag_mode=true 时按标签搜索，返回命中标签下的全部渠道。
-func SearchChannels(c gin.Context) {
-	keyword, group, modelKeyword := c.Query("keyword"), c.Query("group"), c.Query("model")
-	idSort, _ := strconv.ParseBool(c.Query("id_sort"))
-	tagMode, _ := strconv.ParseBool(c.Query("tag_mode"))
-	statusFilter := parseStatusFilter(c.Query("status"))
-	typeFilter := parseTypeFilter(c.Query("type"))
 
 	var channels []*model.Channel
+	var total int64
+	var err error
 	if tagMode {
-		tags, err := model.SearchTags(keyword, group, modelKeyword, idSort)
-		if err != nil {
-			apiError(c, err)
-			return
-		}
-		for _, tag := range tags {
-			if tag != nil && *tag != "" {
-				if tagChannels, err := model.GetChannelsByTag(*tag, idSort, false); err == nil {
-					channels = append(channels, tagChannels...)
-				}
-			}
+		var tags []string
+		if tags, total, err = model.ListChannelTags(filter, page.GetStartIdx(), page.GetPageSize()); err == nil {
+			channels, err = model.ListChannelsByTags(filter, tags)
 		}
 	} else {
-		var err error
-		if channels, err = model.SearchChannels(keyword, group, modelKeyword, idSort); err != nil {
-			apiError(c, err)
-			return
-		}
+		channels, total, err = model.ListChannels(filter, page.GetStartIdx(), page.GetPageSize())
 	}
-
-	// 类型统计基于状态过滤后的结果，在类型过滤之前计算
-	filtered := make([]*model.Channel, 0, len(channels))
-	typeCounts := make(map[int64]int64)
+	if err != nil {
+		apiError(c, err)
+		return
+	}
+	typeCounts, err := model.CountChannelsByType(filter)
+	if err != nil {
+		apiError(c, err)
+		return
+	}
 	for _, ch := range channels {
-		if !matchStatus(ch, statusFilter) {
-			continue
-		}
-		typeCounts[int64(ch.Type)]++
-		if typeFilter < 0 || ch.Type == typeFilter {
-			filtered = append(filtered, ch)
-		}
-	}
-
-	page := getPageQuery(c)
-	total := len(filtered)
-	start := min(page.offset(), total)
-	end := min(start+page.PageSize, total)
-	items := filtered[start:end]
-	for _, ch := range items {
 		clearChannelInfo(ch)
 	}
-	result := page.result(items, int64(total))
+	result := pageResult(page, channels, total)
 	result["type_counts"] = typeCounts
 	apiSuccess(c, result)
+}
+
+// SearchChannels 搜索渠道，参数与返回同 GetAllChannels。
+func SearchChannels(c gin.Context) {
+	GetAllChannels(c)
 }
 
 // GetChannel 取单个渠道（不含 key）。

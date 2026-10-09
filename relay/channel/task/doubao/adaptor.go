@@ -2,7 +2,6 @@ package doubao
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -133,7 +132,7 @@ func (a *TaskAdaptor) BuildRequestBody(c gin.Context, info *relaycommon.RelayInf
 		return nil, errors.Wrap(err, "convert request payload failed")
 	}
 	info.UpstreamModelName = body.Model
-	data, err := json.Marshal(body)
+	data, err := common.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +155,7 @@ func (a *TaskAdaptor) DoResponse(c gin.Context, resp *http.Response, info *relay
 
 	// Parse Doubao response
 	var dResp responsePayload
-	if err := json.Unmarshal(responseBody, &dResp); err != nil {
+	if err := common.Unmarshal(responseBody, &dResp); err != nil {
 		taskErr = service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
 		return
 	}
@@ -280,11 +279,11 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 	}
 
 	metadata := req.Metadata
-	medaBytes, err := json.Marshal(metadata)
+	medaBytes, err := common.Marshal(metadata)
 	if err != nil {
 		return nil, errors.Wrap(err, "metadata marshal metadata failed")
 	}
-	err = json.Unmarshal(medaBytes, &r)
+	err = common.Unmarshal(medaBytes, &r)
 	if err != nil {
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
 	}
@@ -294,7 +293,7 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 
 func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
 	resTask := responseTask{}
-	if err := json.Unmarshal(respBody, &resTask); err != nil {
+	if err := common.Unmarshal(respBody, &resTask); err != nil {
 		return nil, errors.Wrap(err, "unmarshal task result failed")
 	}
 
@@ -332,7 +331,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 
 func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error) {
 	var dResp responseTask
-	if err := json.Unmarshal(originTask.Data, &dResp); err != nil {
+	if err := common.Unmarshal(originTask.Data, &dResp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal doubao task data failed")
 	}
 
