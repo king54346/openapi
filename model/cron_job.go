@@ -47,11 +47,9 @@ type CronJobRun struct {
 	RunAt     int64  `json:"run_at" gorm:"index"`
 }
 
-// GetAllCronJobs 返回全部任务（按 id 倒序）
-func GetAllCronJobs() ([]*CronJob, error) {
-	var jobs []*CronJob
-	err := DB.Order("id desc").Find(&jobs).Error
-	return jobs, err
+// GetCronJobs 分页列出任务（按 id 倒序）
+func GetCronJobs(startIdx, num int) ([]*CronJob, int64, error) {
+	return paginate[*CronJob](DB.Model(&CronJob{}), "id desc", startIdx, num)
 }
 
 // GetEnabledCronJobs 返回全部已启用任务
@@ -147,11 +145,5 @@ func RecordCronJobResult(jobId int64, success bool, message string, latencyMs in
 
 // GetCronJobRuns 分页查询任务运行历史（按 id 倒序）
 func GetCronJobRuns(jobId int64, startIdx, num int) ([]*CronJobRun, int64, error) {
-	var total int64
-	if err := DB.Model(&CronJobRun{}).Where("job_id = ?", jobId).Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	var runs []*CronJobRun
-	err := DB.Where("job_id = ?", jobId).Order("id desc").Offset(startIdx).Limit(num).Find(&runs).Error
-	return runs, total, err
+	return paginate[*CronJobRun](DB.Model(&CronJobRun{}).Where("job_id = ?", jobId), "id desc", startIdx, num)
 }

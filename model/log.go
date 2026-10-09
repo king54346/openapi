@@ -274,15 +274,18 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	return logs, total, err
 }
 
-func SearchAllLogs(keyword string) (logs []*Log, err error) {
-	err = LOG_DB.Where("type = ? or content LIKE ?", keyword, keyword+"%").Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
-	return logs, err
+// SearchAllLogs 按类型或内容前缀分页搜索全部日志，按 id 倒序。
+func SearchAllLogs(keyword string, startIdx, num int) ([]*Log, int64, error) {
+	query := LOG_DB.Model(&Log{}).Where("type = ? or content LIKE ?", keyword, keyword+"%")
+	return paginate[*Log](query, "id desc", startIdx, num)
 }
 
-func SearchUserLogs(userId int, keyword string) (logs []*Log, err error) {
-	err = LOG_DB.Where("user_id = ? and type = ?", userId, keyword).Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
+// SearchUserLogs 按类型分页搜索用户自己的日志，按 id 倒序。
+func SearchUserLogs(userId int, keyword string, startIdx, num int) ([]*Log, int64, error) {
+	query := LOG_DB.Model(&Log{}).Where("user_id = ? and type = ?", userId, keyword)
+	logs, total, err := paginate[*Log](query, "id desc", startIdx, num)
 	formatUserLogs(logs)
-	return logs, err
+	return logs, total, err
 }
 
 type Stat struct {
@@ -496,25 +499,24 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 	return total, nil
 }
 
-// GetLogByKey 按令牌 key（可带 sk- 前缀）查询该令牌的日志，可按 request_id 过滤，最多返回最近 MaxRecentItems 条。
-func GetLogByKey(key, requestId string) ([]*Log, error) {
+// GetLogByKey 按令牌 key（可带 sk- 前缀）分页查询该令牌的日志，可按 request_id 过滤，按 id 倒序。
+func GetLogByKey(key, requestId string, startIdx, num int) ([]*Log, int64, error) {
 	key = strings.TrimPrefix(strings.TrimSpace(key), "sk-")
 	if key == "" {
-		return nil, ErrTokenEmpty
+		return nil, 0, ErrTokenEmpty
 	}
 	var token Token
 	if err := DB.Select("id").Where(commonKeyCol+" = ?", key).First(&token).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrTokenInvalid
+			return nil, 0, ErrTokenInvalid
 		}
-		return nil, err
+		return nil, 0, err
 	}
-	query := LOG_DB.Where("token_id = ?", token.Id)
+	query := LOG_DB.Model(&Log{}).Where("token_id = ?", token.Id)
 	if requestId != "" {
 		query = query.Where("request_id = ?", requestId)
 	}
-	var logs []*Log
-	err := query.Order("id desc").Limit(common.MaxRecentItems).Find(&logs).Error
+	logs, total, err := paginate[*Log](query, "id desc", startIdx, num)
 	formatUserLogs(logs)
-	return logs, err
+	return logs, total, err
 }

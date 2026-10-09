@@ -325,8 +325,11 @@ func TestLoginSessionAndTokenAPI(t *testing.T) {
 	if list := decode[page[model.Token]](t, s.ok(bob, http.MethodGet, "/api/token/", nil)); list.Total != 0 {
 		t.Fatal("bob should see no tokens")
 	}
-	if list := decode[page[model.Token]](t, s.ok(aliceSession, http.MethodGet, "/api/token/search?keyword=ren", nil)); len(list.Items) != 1 {
+	if list := decode[page[model.Token]](t, s.ok(aliceSession, http.MethodGet, "/api/token/search?keyword=ren", nil)); list.Total != 1 || len(list.Items) != 1 {
 		t.Fatal("search by name should find the token")
+	}
+	if list := decode[page[model.Token]](t, s.ok(aliceSession, http.MethodGet, "/api/token/search?keyword=ren&p=2", nil)); list.Total != 1 || len(list.Items) != 0 {
+		t.Fatalf("search page 2 should be empty: %+v", list)
 	}
 
 	// 管理员禁用 alice 后，她已登录的 session 立即失效

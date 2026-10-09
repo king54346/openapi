@@ -23,18 +23,16 @@ func GetUserTokens(userId, startIdx, num int) ([]*Token, int64, error) {
 	return tokens, total, err
 }
 
-// SearchUserTokens 按名称模糊匹配或 key 精确匹配（可带 sk- 前缀）搜索用户的令牌。
-func SearchUserTokens(userId int, keyword, key string) ([]*Token, error) {
-	query := DB.Where("user_id = ?", userId)
+// SearchUserTokens 按名称模糊匹配或 key 精确匹配（可带 sk- 前缀）分页搜索用户的令牌，按 id 倒序。
+func SearchUserTokens(userId int, keyword, key string, startIdx, num int) ([]*Token, int64, error) {
+	query := DB.Model(&Token{}).Where("user_id = ?", userId)
 	if keyword = strings.TrimSpace(keyword); keyword != "" {
 		query = query.Where("name LIKE ?", "%"+keyword+"%")
 	}
 	if key = strings.TrimPrefix(strings.TrimSpace(key), "sk-"); key != "" {
 		query = query.Where(commonKeyCol+" = ?", key)
 	}
-	var tokens []*Token
-	err := query.Order("id desc").Limit(common.MaxRecentItems).Find(&tokens).Error
-	return tokens, err
+	return paginate[*Token](query, "id desc", startIdx, num)
 }
 
 // GetUserTokenById 取用户自己的令牌，不属于该用户时返回 ErrTokenNotFound。

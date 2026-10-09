@@ -29,14 +29,15 @@ func GetAllTokens(c gin.Context) {
 	apiSuccess(c, pageResult(page, tokens, total))
 }
 
-// SearchTokens 按名称（keyword）或 key（token）搜索当前用户的令牌。
+// SearchTokens 按名称（keyword）或 key（token）分页搜索当前用户的令牌。
 func SearchTokens(c gin.Context) {
-	tokens, err := model.SearchUserTokens(c.GetInt("id"), c.Query("keyword"), c.Query("token"))
+	page := common.GetPageQuery(c)
+	tokens, total, err := model.SearchUserTokens(c.GetInt("id"), c.Query("keyword"), c.Query("token"), page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, gin.H{"items": tokens, "total": len(tokens)})
+	apiSuccess(c, pageResult(page, tokens, total))
 }
 
 // GetToken 取当前用户的单个令牌。

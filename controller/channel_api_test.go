@@ -156,6 +156,37 @@ func TestChannelListModesAndFetchModels(t *testing.T) {
 	if tagged.Total != 2 || len(tagged.Items) != 3 {
 		t.Fatalf("tag mode: tags=%d channels=%d", tagged.Total, len(tagged.Items))
 	}
+	// 按标签分页：标签按名称排序，每页返回该页标签下的全部渠道
+	names := func(r listResp) (out []string) {
+		for _, ch := range r.Items {
+			out = append(out, ch.Name)
+		}
+		return out
+	}
+	tagged = decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/?tag_mode=true&page_size=1&id_sort=true", nil))
+	if got := names(tagged); tagged.Total != 2 || fmt.Sprint(got) != "[o2 o1]" {
+		t.Fatalf("tag page 1: total=%d channels=%v", tagged.Total, got)
+	}
+	tagged = decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/?tag_mode=true&page_size=1&p=2", nil))
+	if got := names(tagged); tagged.Total != 2 || fmt.Sprint(got) != "[d1]" {
+		t.Fatalf("tag page 2: total=%d channels=%v", tagged.Total, got)
+	}
+	// 标签模式下状态过滤作用在标签上：只有 t1 下有禁用渠道
+	tagged = decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/?tag_mode=true&status=disabled", nil))
+	if got := names(tagged); tagged.Total != 1 || fmt.Sprint(got) != "[o2]" {
+		t.Fatalf("tag mode disabled: total=%d channels=%v", tagged.Total, got)
+	}
+	// 页码超出范围返回空数组而不是 null
+	if raw := s.ok(admin, http.MethodGet, "/api/channel/?p=99", nil); !strings.Contains(string(raw), `"items":[]`) || decode[listResp](t, raw).Total != 4 {
+		t.Fatalf("page out of range: %s", raw)
+	}
+	// 搜索在数据库分页：完整 key 精确匹配、group 过滤
+	if r := decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/search?keyword=sk-d1", nil)); r.Total != 1 || r.Items[0].Name != "d1" {
+		t.Fatalf("search by key: %+v", r)
+	}
+	if r := decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/search?group=default&model=b&page_size=2", nil)); r.Total != 4 || len(r.Items) != 2 {
+		t.Fatalf("search by group: total=%d items=%d", r.Total, len(r.Items))
+	}
 	search := decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/search?keyword=o&status=disabled", nil))
 	if search.Total != 1 || search.Items[0].Name != "o2" {
 		t.Fatalf("search disabled: %+v", search)

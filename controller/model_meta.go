@@ -24,13 +24,9 @@ func GetAllModelsMeta(c gin.Context) {
 	}
 	model.EnrichModels(models)
 	vendorCounts, _ := model.GetVendorModelCounts()
-	apiSuccess(c, gin.H{
-		"items":         models,
-		"total":         total,
-		"page":          pageInfo.GetPage(),
-		"page_size":     pageInfo.GetPageSize(),
-		"vendor_counts": vendorCounts,
-	})
+	result := pageResult(pageInfo, models, total)
+	result["vendor_counts"] = vendorCounts
+	apiSuccess(c, result)
 }
 
 // GetModelTags 所有模型使用过的标签。
@@ -58,9 +54,7 @@ func SearchModelsMeta(c gin.Context) {
 		return
 	}
 	model.EnrichModels(models)
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(models)
-	apiSuccess(c, pageInfo)
+	apiSuccess(c, pageResult(pageInfo, models, total))
 }
 
 func modelMetaNotFoundOrError(c gin.Context, err error) {

@@ -96,6 +96,9 @@ func TestCronJobAPIAndChannelTest(t *testing.T) {
 		"name": "test channels (renamed)", "type": "channel_test", "cron": "0 * * * *", "enabled": true,
 		"payload": map[string]any{"auto_disable": true},
 	})
+	if jobs := decode[page[model.CronJob]](t, s.ok(admin, http.MethodGet, "/api/cron_job/?p=1&page_size=10", nil)); jobs.Total != 1 || jobs.Items[0].Id != job.Id {
+		t.Fatalf("cron job list: %+v", jobs)
+	}
 	s.ok(admin, http.MethodPost, fmt.Sprintf("/api/cron_job/%d/enabled", job.Id), map[string]any{"enabled": false})
 	if got := decode[model.CronJob](t, s.ok(admin, http.MethodGet, fmt.Sprintf("/api/cron_job/%d", job.Id), nil)); got.Enabled || got.Cron != "0 * * * *" {
 		t.Fatalf("after update/toggle: %+v", got)
@@ -196,9 +199,20 @@ func TestLogAPI(t *testing.T) {
 	}
 
 	// 凭令牌 key 查日志，无需登录
-	byKey := decode[[]model.Log](t, s.ok(actor{}, http.MethodGet, "/api/log/token?key=sk-"+token.Key+"&request_id=r2", nil))
-	if len(byKey) != 1 || byKey[0].RequestId != "r2" {
+	byKey := decode[page[model.Log]](t, s.ok(actor{}, http.MethodGet, "/api/log/token?key=sk-"+token.Key+"&request_id=r2", nil))
+	if byKey.Total != 1 || byKey.Items[0].RequestId != "r2" {
 		t.Fatalf("logs by key: %+v", byKey)
+	}
+	if byKey = decode[page[model.Log]](t, s.ok(actor{}, http.MethodGet, "/api/log/token?key="+token.Key+"&p=2&page_size=1", nil)); byKey.Total != 2 || len(byKey.Items) != 1 || byKey.Items[0].RequestId != "r1" {
+		t.Fatalf("logs by key page 2: %+v", byKey)
+	}
+
+	// 关键字搜索分页：管理员按类型搜全部，用户只搜自己的
+	if r := decode[page[model.Log]](t, s.ok(admin, http.MethodGet, fmt.Sprintf("/api/log/search?keyword=%d&page_size=1", model.LogTypeConsume), nil)); r.Total != 2 || len(r.Items) != 1 {
+		t.Fatalf("search all logs: %+v", r)
+	}
+	if r := decode[page[model.Log]](t, s.ok(alice, http.MethodGet, fmt.Sprintf("/api/log/self/search?keyword=%d", model.LogTypeConsume), nil)); r.Total != 1 || r.Items[0].Username != "alice" {
+		t.Fatalf("search self logs: %+v", r)
 	}
 	s.fail(actor{}, http.MethodGet, "/api/log/token?key=sk-nope", nil)
 

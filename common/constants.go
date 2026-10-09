@@ -10,7 +10,6 @@ var MemoryCacheEnabled bool
 
 var LogConsumeEnabled = true
 var DataExportEnabled = true
-var MaxRecentItems = 1000
 
 var BatchUpdateEnabled = false
 var BatchUpdateInterval int

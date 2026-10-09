@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"openapi/common"
 	"openapi/model"
 	"openapi/service/cron"
 
@@ -82,14 +83,15 @@ func cronJobNotFoundOrError(c gin.Context, err error) {
 	apiError(c, err)
 }
 
-// GetCronJobs 全部定时任务。
+// GetCronJobs 分页列出定时任务。
 func GetCronJobs(c gin.Context) {
-	jobs, err := model.GetAllCronJobs()
+	page := common.GetPageQuery(c)
+	jobs, total, err := model.GetCronJobs(page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, jobs)
+	apiSuccess(c, pageResult(page, jobs, total))
 }
 
 // GetCronJob 单个定时任务。
@@ -198,16 +200,13 @@ func RunCronJobNow(c gin.Context) {
 	apiSuccess(c, gin.H{"message": "job triggered, check the run history later"})
 }
 
-// GetCronJobRuns 任务运行历史，分页参数 p（也兼容 page）与 page_size。
+// GetCronJobRuns 分页查询任务运行历史。
 func GetCronJobRuns(c gin.Context) {
 	id, ok := cronJobID(c)
 	if !ok {
 		return
 	}
 	page := common.GetPageQuery(c)
-	if p, err := strconv.Atoi(c.Query("page")); err == nil && p > 0 && c.Query("p") == "" {
-		page.Page = p
-	}
 	runs, total, err := model.GetCronJobRuns(id, page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)

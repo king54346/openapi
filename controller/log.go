@@ -50,9 +50,7 @@ func GetAllLogs(c gin.Context) {
 		apiError(c, err)
 		return
 	}
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logs)
-	apiSuccess(c, pageInfo)
+	apiSuccess(c, pageResult(pageInfo, logs, total))
 }
 
 // GetUserLogs 用户分页查询自己的日志。
@@ -65,34 +63,35 @@ func GetUserLogs(c gin.Context) {
 		apiError(c, err)
 		return
 	}
-	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logs)
-	apiSuccess(c, pageInfo)
+	apiSuccess(c, pageResult(pageInfo, logs, total))
 }
 
-// SearchAllLogs 管理员按关键字搜索日志。
+// SearchAllLogs 管理员按关键字分页搜索日志。
 func SearchAllLogs(c gin.Context) {
-	logs, err := model.SearchAllLogs(c.Query("keyword"))
+	pageInfo := common.GetPageQuery(c)
+	logs, total, err := model.SearchAllLogs(c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, logs)
+	apiSuccess(c, pageResult(pageInfo, logs, total))
 }
 
-// SearchUserLogs 用户按关键字搜索自己的日志。
+// SearchUserLogs 用户按关键字分页搜索自己的日志。
 func SearchUserLogs(c gin.Context) {
-	logs, err := model.SearchUserLogs(c.GetInt("id"), c.Query("keyword"))
+	pageInfo := common.GetPageQuery(c)
+	logs, total, err := model.SearchUserLogs(c.GetInt("id"), c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, logs)
+	apiSuccess(c, pageResult(pageInfo, logs, total))
 }
 
-// GetLogByKey 凭令牌 key 查询该令牌的日志（无需登录，供令牌持有者自查），可按 request_id 过滤。
+// GetLogByKey 凭令牌 key 分页查询该令牌的日志（无需登录，供令牌持有者自查），可按 request_id 过滤。
 func GetLogByKey(c gin.Context) {
-	logs, err := model.GetLogByKey(c.Query("key"), c.Query("request_id"))
+	pageInfo := common.GetPageQuery(c)
+	logs, total, err := model.GetLogByKey(c.Query("key"), c.Query("request_id"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		if errors.Is(err, model.ErrTokenEmpty) || errors.Is(err, model.ErrTokenInvalid) {
 			apiErrorMsg(c, err.Error())
@@ -101,7 +100,7 @@ func GetLogByKey(c gin.Context) {
 		apiError(c, err)
 		return
 	}
-	apiSuccess(c, logs)
+	apiSuccess(c, pageResult(pageInfo, logs, total))
 }
 
 // GetLogsStat 管理员查询用量统计（额度、RPM、TPM）。
