@@ -181,7 +181,7 @@ func OaiStreamHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 	}
 
 	if !containStreamUsage {
-		usage = service.ResponseText2Usage(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = service.EstimateUsageFromText(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 		usage.CompletionTokens += toolCount * 7
 	}
 
@@ -249,11 +249,8 @@ func OpenaiHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.Respon
 				completionTokens += ctkm
 			}
 		}
-		simpleResponse.Usage = dto.Usage{
-			PromptTokens:     info.GetEstimatePromptTokens(),
-			CompletionTokens: completionTokens,
-			TotalTokens:      info.GetEstimatePromptTokens() + completionTokens,
-		}
+		simpleResponse.Usage = *service.NewUsage(info.GetEstimatePromptTokens(), completionTokens)
+		service.MarkUsageEstimated(c)
 		usageModified = true
 	}
 

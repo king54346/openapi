@@ -69,6 +69,12 @@ func Relay(c gin.Context, relayFormat types.RelayFormat) {
 		apiErr = types.NewErrorWithStatusCode(err, types.ErrorCodeGenRelayInfoFailed, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 		return
 	}
+	// 估算 prompt token，上游未返回 usage 时用于记录用量；估算失败不影响转发
+	if promptTokens, err := service.EstimateRequestToken(c, request.GetTokenCountMeta(), info); err != nil {
+		logger.LogWarn(c, "estimate prompt tokens failed: "+err.Error())
+	} else {
+		info.SetEstimatePromptTokens(promptTokens)
+	}
 	defer logRetryPath(c)
 
 	for attempt := 0; ; attempt++ {

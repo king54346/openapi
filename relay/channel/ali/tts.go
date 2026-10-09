@@ -124,24 +124,15 @@ func aliMultimodalTTSResponseHandler(c gin.Context, resp *http.Response, info *r
 		logger.LogError(c, fmt.Sprintf("failed to write TTS audio response: %v", err))
 	}
 
-	// 计算 usage
-	usage := &dto.Usage{}
-	usage.PromptTokens = info.GetEstimatePromptTokens()
-
-	// 根据音频时长计算 token（固定用 wav 格式）
-	ext := ".wav"
-	reader := bytes.NewReader(audioBytes)
-	duration, durationErr := common.GetAudioDuration(c.Request().Context(), reader, ext)
+	// 根据音频时长计算 completion token（固定用 wav 格式）
+	completionTokens := 0
+	duration, durationErr := common.GetAudioDuration(c.Request().Context(), bytes.NewReader(audioBytes), ".wav")
 	if durationErr != nil {
 		logger.LogWarn(c, fmt.Sprintf("failed to get TTS audio duration: %v", durationErr))
 		// 按字符数粗估
-		completionTokens := int(math.Ceil(float64(ttsResp.Usage.Characters) / 60.0 * 1000))
-		usage.CompletionTokens = completionTokens
+		completionTokens = int(math.Ceil(float64(ttsResp.Usage.Characters) / 60.0 * 1000))
 	} else if duration > 0 {
-		completionTokens := int(math.Round(math.Ceil(duration) / 60.0 * 1000))
-		usage.CompletionTokens = completionTokens
+		completionTokens = service.AudioDurationToTokens(duration)
 	}
-	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
-
-	return nil, usage
+	return nil, service.NewUsage(info.GetEstimatePromptTokens(), completionTokens)
 }

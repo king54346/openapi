@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"openapi/common"
-	"openapi/dto"
 	relaycommon "openapi/relay/common"
+	"openapi/service"
 	"openapi/types"
 
 	"github.com/google/uuid"
@@ -184,13 +184,7 @@ func handleTTSResponse(c gin.Context, resp *http.Response, info *relaycommon.Rel
 	c.Header("Content-Type", contentType)
 	c.Data(http.StatusOK, contentType, audioData)
 
-	usage = &dto.Usage{
-		PromptTokens:     info.GetEstimatePromptTokens(),
-		CompletionTokens: 0,
-		TotalTokens:      info.GetEstimatePromptTokens(),
-	}
-
-	return usage, nil
+	return service.NewUsage(info.GetEstimatePromptTokens(), 0), nil
 }
 
 func generateRequestID() string {
@@ -284,12 +278,7 @@ func handleTTSWebSocketResponse(c gin.Context, requestURL string, volcRequest Vo
 
 			if msg.Sequence < 0 {
 				c.Status(http.StatusOK)
-				usage = &dto.Usage{
-					PromptTokens:     info.GetEstimatePromptTokens(),
-					CompletionTokens: 0,
-					TotalTokens:      info.GetEstimatePromptTokens(),
-				}
-				return usage, nil
+				return service.NewUsage(info.GetEstimatePromptTokens(), 0), nil
 			}
 		default:
 			continue
@@ -297,10 +286,5 @@ func handleTTSWebSocketResponse(c gin.Context, requestURL string, volcRequest Vo
 	}
 
 	c.Status(http.StatusOK)
-	usage = &dto.Usage{
-		PromptTokens:     info.GetEstimatePromptTokens(),
-		CompletionTokens: 0,
-		TotalTokens:      info.GetEstimatePromptTokens(),
-	}
-	return usage, nil
+	return service.NewUsage(info.GetEstimatePromptTokens(), 0), nil
 }

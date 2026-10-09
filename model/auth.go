@@ -44,24 +44,24 @@ type User struct {
 
 // Token API 令牌。key 不含 "sk-" 前缀。
 type Token struct {
+	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index"`
+	Key                string         `json:"key" gorm:"type:char(48);uniqueIndex"`
+	Name               string         `json:"name" gorm:"index"`
+	ModelLimits        string         `json:"model_limits" gorm:"type:varchar(1024);default:''"`
+	IpLimits           string         `json:"allow_ips" gorm:"column:allow_ips;default:''"`
+	Group              string         `json:"group" gorm:"default:''"`
 	Id                 int            `json:"id"`
 	UserId             int            `json:"user_id" gorm:"index"`
-	Key                string         `json:"key" gorm:"type:char(48);uniqueIndex"`
 	Status             int            `json:"status" gorm:"default:1"`
-	Name               string         `json:"name" gorm:"index"`
 	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
 	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
 	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 表示永不过期
 	UsedQuota          int            `json:"used_quota" gorm:"default:0"`
 	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
+	ModelLimitsType    int            `json:"model_limits_type" gorm:"default:0"` // 0 白名单，1 黑名单
 	UnlimitedQuota     bool           `json:"unlimited_quota"`
 	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
-	ModelLimits        string         `json:"model_limits" gorm:"type:varchar(1024);default:''"`
-	ModelLimitsType    int            `json:"model_limits_type" gorm:"default:0"` // 0 白名单，1 黑名单
-	IpLimits           string         `json:"allow_ips" gorm:"column:allow_ips;default:''"`
-	Group              string         `json:"group" gorm:"default:''"`
 	CrossGroupRetry    bool           `json:"cross_group_retry"`
-	DeletedAt          gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 // UserCache 鉴权时写入请求上下文的用户信息。

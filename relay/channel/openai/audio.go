@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"openapi/common"
-	"openapi/constant"
 	"openapi/dto"
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
@@ -28,9 +27,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 	// the subsequent failure of the response body should be regarded as a non-recoverable error,
 	// and can be terminated directly.
 	defer service.CloseResponseBodyGracefully(resp)
-	usage := &dto.Usage{}
-	usage.PromptTokens = info.GetEstimatePromptTokens()
-	usage.TotalTokens = info.GetEstimatePromptTokens()
+	usage := service.NewUsage(info.GetEstimatePromptTokens(), 0)
 	for k, v := range resp.Header {
 		c.Response().Header().Set(k, v[0])
 	}
@@ -54,7 +51,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 			return true
 		})
 	} else {
-		common.SetContextKey(c, constant.ContextKeyLocalCountTokens, true)
+		service.MarkUsageEstimated(c)
 		// 读取响应体到缓冲区
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -102,8 +99,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 			usage.CompletionTokens = estimatedTokens
 			usage.CompletionTokenDetails.AudioTokens = estimatedTokens
 		} else if duration > 0 {
-			// 计算 token: ceil(duration) / 60.0 * 1000，即每分钟 1000 tokens
-			completionTokens := int(math.Round(math.Ceil(duration) / 60.0 * 1000))
+			completionTokens := service.AudioDurationToTokens(duration)
 			usage.CompletionTokens = completionTokens
 			usage.CompletionTokenDetails.AudioTokens = completionTokens
 		}
@@ -139,9 +135,5 @@ func OpenaiSTTHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 		}
 	}
 
-	usage := &dto.Usage{}
-	usage.PromptTokens = info.GetEstimatePromptTokens()
-	usage.CompletionTokens = 0
-	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
-	return nil, usage
+	return nil, service.NewUsage(info.GetEstimatePromptTokens(), 0)
 }

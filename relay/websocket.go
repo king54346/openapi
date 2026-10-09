@@ -44,21 +44,3 @@ func WssHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.Star
 	recordUsage(c, info, realtimeUsageToUsage(usage.(*dto.RealtimeUsage)), nil)
 	return nil
 }
-
-// realtimeUsageToUsage 把 realtime 的 input/output 用量转换为通用 Usage
-func realtimeUsageToUsage(u *dto.RealtimeUsage) *dto.Usage {
-	if u == nil {
-		return nil
-	}
-	usage := &dto.Usage{
-		PromptTokens:     u.InputTokens,
-		CompletionTokens: u.OutputTokens,
-		TotalTokens:      u.TotalTokens,
-	}
-	usage.PromptTokensDetails.CachedTokens = u.InputTokenDetails.CachedTokens
-	usage.PromptTokensDetails.TextTokens = u.InputTokenDetails.TextTokens
-	usage.PromptTokensDetails.AudioTokens = u.InputTokenDetails.AudioTokens
-	usage.CompletionTokenDetails.TextTokens = u.OutputTokenDetails.TextTokens
-	usage.CompletionTokenDetails.AudioTokens = u.OutputTokenDetails.AudioTokens
-	return usage
-}

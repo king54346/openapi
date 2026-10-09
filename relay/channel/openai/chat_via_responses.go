@@ -67,7 +67,7 @@ func OaiResponsesToChatHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 
 	if usage == nil || usage.TotalTokens == 0 {
 		text := service.ExtractOutputTextFromResponses(&responsesResp)
-		usage = service.ResponseText2Usage(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = service.EstimateUsageFromText(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
 		chatResp.Usage = *usage
 	}
 
@@ -452,7 +452,7 @@ func OaiResponsesToChatStreamHandler(c gin.Context, info *relaycommon.RelayInfo,
 	}
 
 	if usage.TotalTokens == 0 {
-		usage = service.ResponseText2Usage(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = service.EstimateUsageFromText(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 	}
 
 	if !sentStart {

@@ -64,17 +64,17 @@ func tokenNotFoundOrError(c gin.Context, err error) {
 
 // tokenRequest 新增/修改令牌的请求体。
 type tokenRequest struct {
-	Id                 int    `json:"id"`
 	Name               string `json:"name"`
+	ModelLimits        string `json:"model_limits"`
+	AllowIps           string `json:"allow_ips"`
+	Group              string `json:"group"`
+	Id                 int    `json:"id"`
 	Status             int    `json:"status"`
 	ExpiredTime        int64  `json:"expired_time"`
 	RemainQuota        int    `json:"remain_quota"`
+	ModelLimitsType    int    `json:"model_limits_type"`
 	UnlimitedQuota     bool   `json:"unlimited_quota"`
 	ModelLimitsEnabled bool   `json:"model_limits_enabled"`
-	ModelLimits        string `json:"model_limits"`
-	ModelLimitsType    int    `json:"model_limits_type"`
-	AllowIps           string `json:"allow_ips"`
-	Group              string `json:"group"`
 	CrossGroupRetry    bool   `json:"cross_group_retry"`
 }
 

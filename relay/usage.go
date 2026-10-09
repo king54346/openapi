@@ -11,6 +11,7 @@ import (
 	"openapi/logger"
 	"openapi/model"
 	relaycommon "openapi/relay/common"
+	"openapi/service"
 
 	gin "github.com/king54346/gin-tiny"
 )
@@ -23,7 +24,7 @@ type UsageRecord struct {
 	CachedTokens     int
 	// Usage 上游返回的完整 usage（含音频、图片等细分）；上游未返回时为本地估算值
 	Usage *dto.Usage
-	// Estimated 为 true 表示上游没有返回 usage，PromptTokens 来自本地估算
+	// Estimated 为 true 表示上游没有返回完整 usage，部分或全部 token 来自本地估算
 	Estimated      bool
 	UseTimeSeconds int
 	// Extra 附加信息，如内置工具调用次数、任务 action 等
@@ -49,13 +50,11 @@ func recordUsage(c gin.Context, info *relaycommon.RelayInfo, usage *dto.Usage, e
 		ModelName:      info.OriginModelName,
 		UseTimeSeconds: int(time.Since(info.StartTime).Seconds()),
 		Extra:          extra,
+		Estimated:      common.GetContextKeyBool(c, constant.ContextKeyUsageEstimated),
 	}
 	if usage == nil {
 		record.Estimated = true
-		usage = &dto.Usage{
-			PromptTokens: info.GetEstimatePromptTokens(),
-			TotalTokens:  info.GetEstimatePromptTokens(),
-		}
+		usage = service.NewUsage(info.GetEstimatePromptTokens(), 0)
 	}
 	record.Usage = usage
 	record.PromptTokens = usage.PromptTokens
@@ -88,11 +87,29 @@ func cachedTokensOf(usage *dto.Usage) int {
 	return usage.PromptCacheHitTokens
 }
 
+// realtimeUsageToUsage 把 realtime 的 input/output 用量转换为通用 Usage
+func realtimeUsageToUsage(u *dto.RealtimeUsage) *dto.Usage {
+	if u == nil {
+		return nil
+	}
+	usage := &dto.Usage{
+		PromptTokens:     u.InputTokens,
+		CompletionTokens: u.OutputTokens,
+		TotalTokens:      u.TotalTokens,
+	}
+	usage.PromptTokensDetails.CachedTokens = u.InputTokenDetails.CachedTokens
+	usage.PromptTokensDetails.TextTokens = u.InputTokenDetails.TextTokens
+	usage.PromptTokensDetails.AudioTokens = u.InputTokenDetails.AudioTokens
+	usage.CompletionTokenDetails.TextTokens = u.OutputTokenDetails.TextTokens
+	usage.CompletionTokenDetails.AudioTokens = u.OutputTokenDetails.AudioTokens
+	return usage
+}
+
 // recordUsageLog 默认的用量处理：写入 logs 表，未初始化数据库时只输出到日志
 func recordUsageLog(c gin.Context, info *relaycommon.RelayInfo, record UsageRecord) {
 	var content []string
 	if record.Estimated {
-		content = append(content, "上游未返回 usage，prompt tokens 为估算值")
+		content = append(content, "上游未返回完整 usage，token 含本地估算值")
 	}
 	if record.PromptTokens+record.CompletionTokens == 0 && record.Extra["action"] == nil {
 		logger.LogWarn(c, fmt.Sprintf("total tokens is 0, userId %d, channelId %d, model %s", info.UserId, info.ChannelId, record.ModelName))
