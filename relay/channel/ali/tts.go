@@ -105,12 +105,16 @@ func aliMultimodalTTSResponseHandler(c gin.Context, resp *http.Response, info *r
 		return types.NewOpenAIError(fmt.Errorf("no audio URL in response"), types.ErrorCodeDoRequestFailed, http.StatusBadGateway), nil
 	}
 
-	// 下载音频文件
-	audioResp, err := http.Get(ttsResp.Output.Audio.URL)
+	// 下载音频文件（地址来自上游响应，走 SSRF 防护）
+	audioResp, err := service.DoSSRFSafeGet(c.Request().Context(), ttsResp.Output.Audio.URL)
 	if err != nil {
 		return types.NewOpenAIError(err, types.ErrorCodeDoRequestFailed, http.StatusBadGateway), nil
 	}
-	defer audioResp.Body.Close()
+	defer service.CloseResponseBodyGracefully(audioResp)
+	if audioResp.StatusCode != http.StatusOK {
+		return types.NewOpenAIError(fmt.Errorf("failed to download TTS audio: HTTP %d", audioResp.StatusCode),
+			types.ErrorCodeDoRequestFailed, http.StatusBadGateway), nil
+	}
 
 	audioBytes, err := io.ReadAll(audioResp.Body)
 	if err != nil {

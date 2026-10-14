@@ -66,4 +66,7 @@ const (
 	// ContextKeyLanguage stores the user's language preference for i18n
 	ContextKeyLanguage ContextKey = "language"
 	ContextKeyIsStream ContextKey = "is_stream"
+
+	// ContextKeyChannelAffinity stores the per-request channel affinity state (*service.channelAffinityState)
+	ContextKeyChannelAffinity ContextKey = "channel_affinity"
 )

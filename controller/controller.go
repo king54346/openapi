@@ -53,11 +53,6 @@ func BatchRetestChannelModels(c gin.Context) {
 	notImplemented(c, "BatchRetestChannelModels", "")
 }
 
-// ClearChannelAffinityCache（桩实现：501）。
-func ClearChannelAffinityCache(c gin.Context) {
-	notImplemented(c, "ClearChannelAffinityCache", "")
-}
-
 // ClearChannelTestRecords（桩实现：501）。
 func ClearChannelTestRecords(c gin.Context) {
 	notImplemented(c, "ClearChannelTestRecords", "")
@@ -126,16 +121,6 @@ func GetAllTopUps(c gin.Context) {
 // GetAllVendors（桩实现：501）。
 func GetAllVendors(c gin.Context) {
 	notImplemented(c, "GetAllVendors", "")
-}
-
-// GetChannelAffinityCacheStats（桩实现：501）。
-func GetChannelAffinityCacheStats(c gin.Context) {
-	notImplemented(c, "GetChannelAffinityCacheStats", "")
-}
-
-// GetChannelAffinityUsageCacheStats（桩实现：501）。
-func GetChannelAffinityUsageCacheStats(c gin.Context) {
-	notImplemented(c, "GetChannelAffinityUsageCacheStats", "")
 }
 
 // GetChannelTestRecords（桩实现：501）。

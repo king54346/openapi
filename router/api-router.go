@@ -159,9 +159,17 @@ func SetApiRouter(router *GinTiny.Engine) {
 			optionRoute.GET("/", controller.GetOptions)
 			// PUT /api/option/ - 更新系统配置参数
 			optionRoute.PUT("/", controller.UpdateOption)
+			// GET /api/option/fetch_setting - 获取 SSRF 防护配置
+			optionRoute.GET("/fetch_setting", controller.GetFetchSetting)
+			// PUT /api/option/fetch_setting - 更新 SSRF 防护配置（名单、端口、是否允许内网）
+			optionRoute.PUT("/fetch_setting", controller.UpdateFetchSetting)
+			// GET /api/option/channel_affinity - 获取渠道亲和性配置
+			optionRoute.GET("/channel_affinity", controller.GetChannelAffinitySetting)
+			// PUT /api/option/channel_affinity - 更新渠道亲和性配置（规则、TTL、容量）
+			optionRoute.PUT("/channel_affinity", controller.UpdateChannelAffinitySetting)
 			// GET /api/option/channel_affinity_cache - 获取渠道亲和性缓存统计
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)
-			// DELETE /api/option/channel_affinity_cache - 清除渠道亲和性缓存
+			// DELETE /api/option/channel_affinity_cache - 清除渠道亲和性绑定（?rule= 按规则，?reset_usage=true 同时清空统计）
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)
 			// POST /api/option/rest_model_ratio - 重置模型倍率配置
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
@@ -372,7 +380,7 @@ func SetApiRouter(router *GinTiny.Engine) {
 		logRoute.GET("/stat", middleware.AdminAuth(), controller.GetLogsStat)
 		// GET /api/log/self/stat - 获取当前用户的日志统计
 		logRoute.GET("/self/stat", middleware.UserAuth(), controller.GetLogsSelfStat)
-		// GET /api/log/channel_affinity_usage_cache - 获取渠道亲和性使用缓存（管理员）
+		// GET /api/log/channel_affinity_usage_cache - 渠道亲和性命中、请求次数与 Token 用量统计（管理员）
 		logRoute.GET("/channel_affinity_usage_cache", middleware.AdminAuth(), controller.GetChannelAffinityUsageCacheStats)
 		// GET /api/log/search - 搜索所有日志（管理员）
 		logRoute.GET("/search", middleware.AdminAuth(), controller.SearchAllLogs)

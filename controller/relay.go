@@ -152,6 +152,10 @@ func processChannelError(c gin.Context, info *relaycommon.RelayInfo, apiErr *typ
 		common.GetContextKeyString(c, constant.ContextKeyChannelKey),
 		common.GetContextKeyBool(c, constant.ContextKeyChannelAutoBan),
 		apiErr)
+	// 亲和渠道出现渠道侧错误时解除绑定；请求本身有误（如 400）不影响绑定
+	if types.IsChannelError(apiErr) || retryableStatus(apiErr.StatusCode) {
+		service.OnChannelAffinityFailure(c, channelID)
+	}
 }
 
 // recordRelayErrorLog 把一次失败的转发写入 logs 表（type=5），每个失败的渠道各记一条。
@@ -213,6 +217,9 @@ func shouldRetry(c gin.Context, apiErr *types.StarAPIError, remaining int) bool 
 		return false
 	}
 	if types.IsSkipRetryError(apiErr) {
+		return false
+	}
+	if service.ShouldSkipRetryByAffinity(c) {
 		return false
 	}
 	if types.IsChannelError(apiErr) {
@@ -294,6 +301,9 @@ func RelayTask(c gin.Context) {
 		}
 		logger.LogError(c, fmt.Sprintf("task relay failed (channel #%d, attempt %d, status %d): %s",
 			channelID, attempt+1, taskErr.StatusCode, taskErr.Message))
+		if !taskErr.LocalError && retryableStatus(taskErr.StatusCode) {
+			service.OnChannelAffinityFailure(c, channelID)
+		}
 
 		if !shouldRetryTaskRelay(c, taskErr, common.RetryTimes-attempt) {
 			return
@@ -314,6 +324,9 @@ func shouldRetryTaskRelay(c gin.Context, taskErr *dto.TaskError, remaining int) 
 		return false
 	}
 	if _, ok := c.Get(string(constant.ContextKeyTokenSpecificChannelId)); ok {
+		return false
+	}
+	if service.ShouldSkipRetryByAffinity(c) {
 		return false
 	}
 	return retryableStatus(taskErr.StatusCode)

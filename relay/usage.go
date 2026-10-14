@@ -74,6 +74,10 @@ func recordUsage(c gin.Context, info *relaycommon.RelayInfo, usage *dto.Usage, e
 	if reason := common.GetContextKeyString(c, constant.ContextKeyAdminRejectReason); reason != "" {
 		record.Extra["reject_reason"] = reason
 	}
+	if affinity := service.ChannelAffinityLogInfo(c); affinity != nil {
+		record.Extra["channel_affinity"] = affinity
+		service.RecordChannelAffinityUsage(c, record.PromptTokens, record.CompletionTokens, record.CachedTokens)
+	}
 
 	usageRecorder(c, info, record)
 }

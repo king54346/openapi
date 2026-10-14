@@ -35,6 +35,8 @@ func InitEnv() {
 	constant.MaxRequestBodyMB = GetEnvOrDefault("MAX_REQUEST_BODY_MB", 128)
 	constant.TaskQueryLimit = GetEnvOrDefault("TASK_QUERY_LIMIT", 1000)
 	constant.TaskTimeoutMinutes = GetEnvOrDefault("TASK_TIMEOUT_MINUTES", 1440)
+
+	initFetchSettingFromEnv()
 }
 
 func GetEnvOrDefault(env string, defaultValue int) int {

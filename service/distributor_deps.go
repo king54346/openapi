@@ -11,7 +11,7 @@ import (
 	gin "github.com/king54346/gin-tiny"
 )
 
-// distributor 相关依赖桩：待接入真实分组/渠道/亲和性实现后逐个替换。
+// distributor 相关依赖桩：待接入真实分组/渠道实现后逐个替换；渠道亲和性见 channel_affinity.go。
 
 // RetryParam 渠道重试选型参数。
 type RetryParam struct {
@@ -55,14 +55,6 @@ func GetMjRequestModel(relayMode int, req *dto.MidjourneyRequest) (string, *MjRe
 	return "", &MjRequestError{Description: "midjourney request parsing is not implemented"}, false
 }
 
-// GetPreferredChannelByAffinity 按亲和性取偏好渠道（桩实现：无偏好）。
-func GetPreferredChannelByAffinity(c gin.Context, modelName, usingGroup string) (int, bool) {
-	return 0, false
-}
-
-// MarkChannelAffinityUsed 标记亲和性已使用（桩实现：无操作）。
-func MarkChannelAffinityUsed(c gin.Context, group string, channelID int) {}
-
 // GetUserAutoGroup 取用户 auto 分组展开列表：暂无 auto 分组配置，只展开为用户自身分组。
 func GetUserAutoGroup(userGroup string) []string {
 	if userGroup == "" {
@@ -105,6 +97,3 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	}
 	return nil, userGroup, nil
 }
-
-// RecordChannelAffinity 记录渠道亲和性（桩实现：无操作）。
-func RecordChannelAffinity(c gin.Context, channelID int) {}
