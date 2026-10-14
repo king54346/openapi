@@ -169,7 +169,8 @@ func Distribute() func(c gin.Context) {
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 		c.Next()
 		if channel != nil && c.Response() != nil && c.Response().Status() < http.StatusBadRequest {
-			service.RecordChannelAffinity(c, channel.Id)
+			// 重试后最终成功的渠道可能不是最初选中的，以上下文中的为准
+			service.RecordChannelAffinity(c, common.GetContextKeyInt(c, constant.ContextKeyChannelId))
 		}
 	}
 }
