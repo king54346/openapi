@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -11,9 +12,9 @@ import (
 	"openapi/constant"
 )
 
-// GetImageFromUrl 下载图片，返回 MIME 类型和 base64 编码的数据
+// GetImageFromUrl 下载图片，返回 MIME 类型和 base64 编码的数据；地址不受信任，走 SSRF 防护
 func GetImageFromUrl(url string) (mimeType string, data string, err error) {
-	resp, err := GetHttpClient().Get(url)
+	resp, err := DoSSRFSafeGet(context.Background(), url)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to download image: %w", err)
 	}

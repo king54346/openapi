@@ -159,6 +159,10 @@ func SetApiRouter(router *GinTiny.Engine) {
 			optionRoute.GET("/", controller.GetOptions)
 			// PUT /api/option/ - 更新系统配置参数
 			optionRoute.PUT("/", controller.UpdateOption)
+			// GET /api/option/fetch_setting - 获取 SSRF 防护配置
+			optionRoute.GET("/fetch_setting", controller.GetFetchSetting)
+			// PUT /api/option/fetch_setting - 更新 SSRF 防护配置（名单、端口、是否允许内网）
+			optionRoute.PUT("/fetch_setting", controller.UpdateFetchSetting)
 			// GET /api/option/channel_affinity - 获取渠道亲和性配置
 			optionRoute.GET("/channel_affinity", controller.GetChannelAffinitySetting)
 			// PUT /api/option/channel_affinity - 更新渠道亲和性配置（规则、TTL、容量）
