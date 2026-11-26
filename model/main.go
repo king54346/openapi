@@ -50,8 +50,14 @@ func InitDB(db *gorm.DB, logDB *gorm.DB) error {
 	if err := DB.AutoMigrate(&Channel{}, &Task{}, &CronJob{}, &CronJobRun{}); err != nil {
 		return err
 	}
-	// users / tokens / models 表由管理端维护且列更多，已存在时不迁移，避免改动其结构；仅新库时建表
-	for _, table := range []any{&User{}, &Token{}, &Model{}} {
+	// 分组功能已移除：清掉历史 group 列与分组配置项（幂等，失败只记日志）
+	DropGroupColumns()
+	// users / tokens / models 等表由管理端维护且列更多，已存在时不迁移，避免改动其结构；仅新库时建表
+	for _, table := range []any{
+		&User{}, &Token{}, &Model{},
+		&Option{}, &Setup{},
+		&Vendor{}, &PrefillGroup{}, &TokenAccessTemplate{}, &ChannelTestRecord{},
+	} {
 		if !DB.Migrator().HasTable(table) {
 			if err := DB.AutoMigrate(table); err != nil {
 				return err

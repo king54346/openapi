@@ -12,7 +12,7 @@ import (
 
 // SetRelayRouter 设置中继路由
 // 这是核心的 AI 模型请求转发路由，支持多种 AI 服务商的 API 格式
-// 包括：OpenAI、Claude、Gemini、Midjourney、Suno 等
+// 包括：tokens.OpenAI、tokens.Claude、tokens.Gemini、Midjourney、Suno 等
 func SetRelayRouter(router *gin.Engine) {
 	// 应用全局中间件
 	router.Use(cors.Default())                           // 跨域资源共享
@@ -27,17 +27,17 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		// GET /v1/models - 获取可用模型列表
 		// 用途: 根据请求头自动识别服务商类型并返回对应的模型列表
-		// 支持: OpenAI、Claude、Gemini 格式
+		// 支持: tokens.OpenAI、tokens.Claude、tokens.Gemini 格式
 		modelsRouter.GET("", func(c gin.Context) {
 			switch {
 			case c.GetHeader("x-api-key") != "" && c.GetHeader("anthropic-version") != "":
-				// Claude 格式（根据 x-api-key 和 anthropic-version 请求头识别）
+				// tokens.Claude 格式（根据 x-api-key 和 anthropic-version 请求头识别）
 				controller.ListModels(c, constant.ChannelTypeAnthropic)
 			case c.GetHeader("x-goog-api-key") != "" || c.Query("key") != "":
-				// Gemini 格式（根据 x-goog-api-key 请求头或 key 查询参数识别）
+				// tokens.Gemini 格式（根据 x-goog-api-key 请求头或 key 查询参数识别）
 				controller.RetrieveModel(c, constant.ChannelTypeGemini)
 			default:
-				// OpenAI 格式（默认）
+				// tokens.OpenAI 格式（默认）
 				controller.ListModels(c, constant.ChannelTypeOpenAI)
 			}
 		})
@@ -48,34 +48,34 @@ func SetRelayRouter(router *gin.Engine) {
 		modelsRouter.GET("/:model", func(c gin.Context) {
 			switch {
 			case c.GetHeader("x-api-key") != "" && c.GetHeader("anthropic-version") != "":
-				// Claude 格式
+				// tokens.Claude 格式
 				controller.RetrieveModel(c, constant.ChannelTypeAnthropic)
 			default:
-				// OpenAI 格式（默认）
+				// tokens.OpenAI 格式（默认）
 				controller.RetrieveModel(c, constant.ChannelTypeOpenAI)
 			}
 		})
 	}
 
-	// ==================== Gemini 模型列表路由 ====================
-	// Gemini 官方 API 格式，路径为 /v1beta/models
+	// ==================== tokens.Gemini 模型列表路由 ====================
+	// tokens.Gemini 官方 API 格式，路径为 /v1beta/models
 	geminiRouter := router.Group("/v1beta/models")
 	geminiRouter.Use(middleware.TokenAuth()) // Token 认证
 	{
-		// GET /v1beta/models - 获取 Gemini 模型列表
-		// 用途: 返回 Gemini 官方格式的模型列表
+		// GET /v1beta/models - 获取 tokens.Gemini 模型列表
+		// 用途: 返回 tokens.Gemini 官方格式的模型列表
 		geminiRouter.GET("", func(c gin.Context) {
 			controller.ListModels(c, constant.ChannelTypeGemini)
 		})
 	}
 
-	// ==================== Gemini OpenAI 兼容路由 ====================
-	// Gemini 提供的 OpenAI 兼容接口，路径为 /v1beta/openai/models
+	// ==================== tokens.Gemini tokens.OpenAI 兼容路由 ====================
+	// tokens.Gemini 提供的 tokens.OpenAI 兼容接口，路径为 /v1beta/openai/models
 	geminiCompatibleRouter := router.Group("/v1beta/openai/models")
 	geminiCompatibleRouter.Use(middleware.TokenAuth()) // Token 认证
 	{
-		// GET /v1beta/openai/models - 获取模型列表（OpenAI 格式）
-		// 用途: 返回 OpenAI 格式的模型列表，方便使用 OpenAI SDK 访问 Gemini
+		// GET /v1beta/openai/models - 获取模型列表（tokens.OpenAI 格式）
+		// 用途: 返回 tokens.OpenAI 格式的模型列表，方便使用 tokens.OpenAI SDK 访问 tokens.Gemini
 		geminiCompatibleRouter.GET("", func(c gin.Context) {
 			controller.ListModels(c, constant.ChannelTypeOpenAI)
 		})
@@ -118,9 +118,9 @@ func SetRelayRouter(router *gin.Engine) {
 		playgroundRouter.POST("/audio/transcriptions", controller.PlaygroundAudio)
 	}
 
-	// ==================== OpenAI 主要 API 路由 ====================
+	// ==================== tokens.OpenAI 主要 API 路由 ====================
 	// 路径前缀: /v1
-	// 支持 OpenAI、Claude、Gemini 等多种服务商的 API 请求转发
+	// 支持 tokens.OpenAI、tokens.Claude、tokens.Gemini 等多种服务商的 API 请求转发
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.SystemPerformanceCheck()) // 系统性能检查
 	relayV1Router.Use(middleware.TokenAuth())              // Token 认证
@@ -130,7 +130,7 @@ func SetRelayRouter(router *gin.Engine) {
 		wsRouter := relayV1Router.Group("")
 		wsRouter.Use(middleware.Distribute()) // 渠道分发
 
-		// GET /v1/realtime - OpenAI Realtime API
+		// GET /v1/realtime - tokens.OpenAI Realtime API
 		// 用途: 实时语音对话，通过 WebSocket 进行双向通信
 		// 支持: gpt-4o-realtime 等实时模型
 		wsRouter.GET("/realtime", func(c gin.Context) {
@@ -142,9 +142,9 @@ func SetRelayRouter(router *gin.Engine) {
 		httpRouter := relayV1Router.Group("")
 		httpRouter.Use(middleware.Distribute()) // 渠道分发
 
-		// -------------------- Claude 相关路由 --------------------
-		// POST /v1/messages - Claude Messages API
-		// 用途: Claude 官方格式的对话接口
+		// -------------------- tokens.Claude 相关路由 --------------------
+		// POST /v1/messages - tokens.Claude Messages API
+		// 用途: tokens.Claude 官方格式的对话接口
 		// 文档: https://docs.anthropic.com/claude/reference/messages_post
 		httpRouter.POST("/messages", func(c gin.Context) {
 			controller.Relay(c, types.RelayFormatClaude)
@@ -167,7 +167,7 @@ func SetRelayRouter(router *gin.Engine) {
 		})
 
 		// -------------------- Responses API 相关路由 --------------------
-		// POST /v1/responses - OpenAI Responses API
+		// POST /v1/responses - tokens.OpenAI Responses API
 		// 用途: 新的响应格式接口，支持更丰富的输出格式
 		httpRouter.POST("/responses", func(c gin.Context) {
 			controller.Relay(c, types.RelayFormatOpenAIResponses)
@@ -240,15 +240,15 @@ func SetRelayRouter(router *gin.Engine) {
 			controller.Relay(c, types.RelayFormatRerank)
 		})
 
-		// -------------------- Gemini 兼容路由 --------------------
-		// POST /v1/engines/:model/embeddings - Gemini Embedding 接口
-		// 用途: Gemini 的文本嵌入接口，使用类 OpenAI 格式
+		// -------------------- tokens.Gemini 兼容路由 --------------------
+		// POST /v1/engines/:model/embeddings - tokens.Gemini Embedding 接口
+		// 用途: tokens.Gemini 的文本嵌入接口，使用类 tokens.OpenAI 格式
 		httpRouter.POST("/engines/:model/embeddings", func(c gin.Context) {
 			controller.Relay(c, types.RelayFormatGemini)
 		})
 
-		// POST /v1/models/*path - Gemini 通用路由
-		// 用途: 处理所有 Gemini 模型相关的请求
+		// POST /v1/models/*path - tokens.Gemini 通用路由
+		// 用途: 处理所有 tokens.Gemini 模型相关的请求
 		// 路径示例: /v1/models/gemini-pro:generateContent
 		httpRouter.POST("/models/*path", func(c gin.Context) {
 			controller.Relay(c, types.RelayFormatGemini)

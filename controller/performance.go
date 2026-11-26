@@ -26,7 +26,7 @@ type PerformanceStats struct {
 	// 磁盘缓存目录信息
 	DiskCacheInfo DiskCacheInfo `json:"disk_cache_info"`
 	// 磁盘空间信息
-	DiskSpaceInfo system.DiskSpaceInfo `json:"disk_space_info"`
+	DiskSpaceInfo DiskSpaceInfo `json:"disk_space_info"`
 	// 配置信息
 	Config PerformanceConfig `json:"config"`
 }
@@ -105,7 +105,7 @@ func GetPerformanceStats(c gin.Context) {
 			DiskCacheThresholdMB:   diskConfig.ThresholdMB,
 			DiskCacheMaxSizeMB:     diskConfig.MaxSizeMB,
 			DiskCachePath:          diskConfig.Path,
-			IsRunningInContainer:   system.IsRunningInContainer(),
+			IsRunningInContainer:   IsRunningInContainer(),
 			MonitorEnabled:         monitorConfig.Enabled,
 			MonitorCPUThreshold:    monitorConfig.CPUThreshold,
 			MonitorMemoryThreshold: monitorConfig.MemoryThreshold,

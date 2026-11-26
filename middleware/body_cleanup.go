@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"openapi/common"
-	"openapi/service"
+	"openapi/service/files"
 
 	gin "github.com/king54346/gin-tiny"
 )
@@ -18,6 +18,6 @@ func BodyStorageCleanup() gin.HandlerFunc {
 		common.CleanupBodyStorage(c)
 
 		// 清理文件缓存（URL 下载的文件等）
-		service.CleanupFileSources(c)
+		files.CleanupFileSources(c)
 	}
 }

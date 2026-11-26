@@ -40,12 +40,12 @@ var ChannelBaseURLs = map[int]string{
 }
 
 var ChannelTypeNames = map[int]string{
-	ChannelTypeUnknown:     "Unknown",
-	ChannelTypeOpenAI:      "OpenAI",
+	ChannelTypeUnknown:     "tokens.Unknown",
+	ChannelTypeOpenAI:      "tokens.OpenAI",
 	ChannelTypeAnthropic:   "Anthropic",
 	ChannelTypeAli:         "Ali",
 	ChannelTypeOpenRouter:  "OpenRouter",
-	ChannelTypeGemini:      "Gemini",
+	ChannelTypeGemini:      "tokens.Gemini",
 	ChannelTypeMoonshot:    "Moonshot",
 	ChannelTypeMiniMax:     "MiniMax",
 	ChannelTypeDeepSeek:    "DeepSeek",
@@ -58,10 +58,10 @@ func GetChannelTypeName(channelType int) string {
 	if name, ok := ChannelTypeNames[channelType]; ok {
 		return name
 	}
-	return "Unknown"
+	return "tokens.Unknown"
 }
 
-// ChannelSpecialBase 渠道 BaseURL 填写为特殊套餐名时，改用套餐对应的 OpenAI 兼容地址
+// ChannelSpecialBase 渠道 BaseURL 填写为特殊套餐名时，改用套餐对应的 tokens.OpenAI 兼容地址
 type ChannelSpecialBase struct {
 	OpenAIBaseURL string
 }

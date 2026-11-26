@@ -14,7 +14,6 @@ import (
 	"openapi/dto"
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -273,7 +272,7 @@ func aliImageHandler(a *Adaptor, c gin.Context, resp *http.Response, info *relay
 	if err != nil {
 		return types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError), nil
 	}
-	service.CloseResponseBodyGracefully(resp)
+	httpclient.CloseResponseBodyGracefully(resp)
 	err = common.Unmarshal(responseBody, &aliTaskResponse)
 	if err != nil {
 		return types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError), nil
@@ -320,7 +319,7 @@ func aliImageHandler(a *Adaptor, c gin.Context, resp *http.Response, info *relay
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeBadResponseBody), nil
 	}
-	service.IOCopyBytesGracefully(c, resp, jsonResponse)
+	httpclient.IOCopyBytesGracefully(c, resp, jsonResponse)
 
 	return nil, &dto.Usage{}
 }

@@ -32,7 +32,6 @@ type User struct {
 	Role         int            `json:"role" gorm:"default:1"`
 	Status       int            `json:"status" gorm:"default:1"`
 	Email        string         `json:"email" gorm:"index"`
-	Group        string         `json:"group" gorm:"type:varchar(64);default:'default'"`
 	AccessToken  *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"`
 	Quota        int            `json:"quota" gorm:"default:0"`
 	UsedQuota    int            `json:"used_quota" gorm:"default:0"`
@@ -49,7 +48,6 @@ type Token struct {
 	Name               string         `json:"name" gorm:"index"`
 	ModelLimits        string         `json:"model_limits" gorm:"type:varchar(1024);default:''"`
 	IpLimits           string         `json:"allow_ips" gorm:"column:allow_ips;default:''"`
-	Group              string         `json:"group" gorm:"default:''"`
 	Id                 int            `json:"id"`
 	UserId             int            `json:"user_id" gorm:"index"`
 	Status             int            `json:"status" gorm:"default:1"`
@@ -69,7 +67,6 @@ type UserCache struct {
 	Username string
 	Role     int
 	Status   int
-	Group    string
 }
 
 // ValidateAccessToken 校验管理端 access token（Authorization 头，可带 Bearer 前缀）并返回对应用户。
@@ -135,7 +132,7 @@ func getCachedUser(userId int) (User, error) {
 		return user, nil
 	}
 	var user User
-	err := DB.Select("id", "username", "role", "status", commonGroupCol).Where("id = ?", userId).First(&user).Error
+	err := DB.Select("id", "username", "role", "status").Where("id = ?", userId).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return User{}, ErrUserNotFound
@@ -147,13 +144,13 @@ func getCachedUser(userId int) (User, error) {
 	return user, nil
 }
 
-// GetUserCache 获取用户名、状态与分组。
+// GetUserCache 获取用户名与状态。
 func GetUserCache(userId int) (*UserCache, error) {
 	user, err := getCachedUser(userId)
 	if err != nil {
 		return nil, err
 	}
-	return &UserCache{Username: user.Username, Role: user.Role, Status: user.Status, Group: user.Group}, nil
+	return &UserCache{Username: user.Username, Role: user.Role, Status: user.Status}, nil
 }
 
 // IsAdmin 判断用户是否为管理员（含 root）。查询失败时按非管理员处理（fail-closed）。
@@ -162,7 +159,7 @@ func IsAdmin(userId int) bool {
 	if err != nil {
 		return false
 	}
-	return user.Role >= common.RoleAdminUser
+	return user.Role >= RoleAdminUser
 }
 
 // splitList 按逗号、换行或空白切分列表并去掉空项。
@@ -200,7 +197,6 @@ func (u *UserCache) WriteContext(c gin.Context) {
 		return
 	}
 	common.SetContextKey(c, constant.ContextKeyUserStatus, u.Status)
-	common.SetContextKey(c, constant.ContextKeyUserGroup, u.Group)
 	// 日志表的 username 列从这里取
 	c.Set("username", u.Username)
 }

@@ -15,7 +15,7 @@ import (
 	"openapi/model"
 	"openapi/relay/channel"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
+	"openapi/service/relayerr"
 
 	gin "github.com/king54346/gin-tiny"
 	"github.com/pkg/errors"
@@ -79,19 +79,19 @@ func (a *TaskAdaptor) DoRequest(c gin.Context, info *relaycommon.RelayInfo, requ
 func (a *TaskAdaptor) DoResponse(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (taskID string, taskData []byte, taskErr *dto.TaskError) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		taskErr = service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
+		taskErr = relayerr.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
 		return
 	}
 	_ = resp.Body.Close()
 
 	var hResp VideoResponse
 	if err := common.Unmarshal(responseBody, &hResp); err != nil {
-		taskErr = service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
+		taskErr = relayerr.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
 		return
 	}
 
 	if hResp.BaseResp.StatusCode != StatusSuccess {
-		taskErr = service.TaskErrorWrapper(
+		taskErr = relayerr.TaskErrorWrapper(
 			fmt.Errorf("hailuo api error: %s", hResp.BaseResp.StatusMsg),
 			strconv.Itoa(hResp.BaseResp.StatusCode),
 			http.StatusBadRequest,
@@ -125,7 +125,7 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+key)
 
-	client, err := service.GetHttpClientWithProxy(proxy)
+	client, err := httpclient.GetHttpClientWithProxy(proxy)
 	if err != nil {
 		return nil, fmt.Errorf("new proxy http client failed: %w", err)
 	}
@@ -258,7 +258,7 @@ func (a *TaskAdaptor) buildVideoURL(_, fileID string) string {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
-	resp, err := service.GetHttpClient().Do(req)
+	resp, err := httpclient.GetHttpClient().Do(req)
 	if err != nil {
 		return ""
 	}

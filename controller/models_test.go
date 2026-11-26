@@ -32,10 +32,10 @@ func setupModelCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ch := range []*model.Channel{
-		{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Key: "k", Name: "c1", Group: "default", Models: "a,b"},
-		{Type: constant.ChannelTypeDeepSeek, Status: common.ChannelStatusEnabled, Key: "k", Name: "c2", Group: "default", Models: "b,c"},
-		{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Key: "k", Name: "c3", Group: "vip", Models: "d"},
-		{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusManuallyDisabled, Key: "k", Name: "c4", Group: "default", Models: "disabled-model"},
+		{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Key: "k", Name: "c1", Models: "a,b"},
+		{Type: constant.ChannelTypeDeepSeek, Status: common.ChannelStatusEnabled, Key: "k", Name: "c2", Models: "b,c"},
+		{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusEnabled, Key: "k", Name: "c3", Models: "d"},
+		{Type: constant.ChannelTypeOpenAI, Status: common.ChannelStatusManuallyDisabled, Key: "k", Name: "c4", Models: "disabled-model"},
 	} {
 		if err := ch.Insert(); err != nil {
 			t.Fatal(err)
@@ -47,10 +47,9 @@ func setupModelCache(t *testing.T) {
 }
 
 // modelContext 模拟 TokenAuth 写入的上下文；limits 为 nil 表示令牌未开启模型限制。
-func modelContext(group string, limits map[string]bool, limitType int) (gin.Context, *httptest.ResponseRecorder) {
+func modelContext(limits map[string]bool, limitType int) (gin.Context, *httptest.ResponseRecorder) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	common.SetContextKey(c, constant.ContextKeyUsingGroup, group)
 	if limits != nil {
 		c.Set("token_model_limit_enabled", true)
 		c.Set("token_model_limit", limits)
@@ -63,22 +62,18 @@ func TestUsableModels(t *testing.T) {
 	setupModelCache(t)
 	cases := []struct {
 		name      string
-		group     string
 		limits    map[string]bool
 		limitType int
 		want      []string
 	}{
-		{"no limit", "default", nil, 0, []string{"a", "b", "c"}},
-		{"other group", "vip", nil, 0, []string{"d"}},
-		{"unknown group", "nobody", nil, 0, []string{}},
-		{"whitelist", "default", map[string]bool{"a": true, "c": true, "x": true}, 0, []string{"a", "c"}},
-		{"empty whitelist allows nothing", "default", map[string]bool{}, 0, []string{}},
-		{"blacklist", "default", map[string]bool{"b": true}, 1, []string{"a", "c"}},
-		{"empty blacklist allows all", "default", map[string]bool{}, 1, []string{"a", "b", "c"}},
-		{"whitelist cannot add models outside group", "vip", map[string]bool{"a": true}, 0, []string{}},
+		{"no limit", nil, 0, []string{"a", "b", "c", "d"}},
+		{"whitelist", map[string]bool{"a": true, "c": true, "x": true}, 0, []string{"a", "c"}},
+		{"empty whitelist allows nothing", map[string]bool{}, 0, []string{}},
+		{"blacklist", map[string]bool{"b": true}, 1, []string{"a", "c", "d"}},
+		{"empty blacklist allows all", map[string]bool{}, 1, []string{"a", "b", "c", "d"}},
 	}
 	for _, tc := range cases {
-		c, _ := modelContext(tc.group, tc.limits, tc.limitType)
+		c, _ := modelContext(tc.limits, tc.limitType)
 		got := usableModels(c)
 		if len(got) == 0 && len(tc.want) == 0 {
 			continue
@@ -152,7 +147,7 @@ func TestEnabledListModels(t *testing.T) {
 func TestListAndRetrieveModels(t *testing.T) {
 	setupModelCache(t)
 
-	c, w := modelContext("default", map[string]bool{"b": true}, 1)
+	c, w := modelContext(map[string]bool{"b": true}, 1)
 	ListModels(c, constant.ChannelTypeOpenAI)
 	var list struct {
 		Object string        `json:"object"`
@@ -165,15 +160,15 @@ func TestListAndRetrieveModels(t *testing.T) {
 	for _, m := range list.Data {
 		ids = append(ids, m.Id)
 	}
-	if list.Object != "list" || !slices.Equal(ids, []string{"a", "c"}) {
+	if list.Object != "list" || !slices.Equal(ids, []string{"a", "c", "d"}) {
 		t.Fatalf("list = %s", w.Body.String())
 	}
 
 	for _, tc := range []struct {
 		model string
 		code  int
-	}{{"a", http.StatusOK}, {"b", http.StatusNotFound}, {"d", http.StatusNotFound}} {
-		c, w := modelContext("default", map[string]bool{"b": true}, 1)
+	}{{"a", http.StatusOK}, {"b", http.StatusNotFound}, {"d", http.StatusOK}} {
+		c, w := modelContext(map[string]bool{"b": true}, 1)
 		c.AddParam("model", tc.model)
 		RetrieveModel(c, constant.ChannelTypeOpenAI)
 		if w.Code != tc.code {

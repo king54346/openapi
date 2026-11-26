@@ -30,7 +30,7 @@ func TestDetect(t *testing.T) {
 func TestOpenSQLiteWithSeparateLogDB(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{
-		SQLitePath:   filepath.Join(dir, "main.db"),
+		SQLitePath:   filepath.Join(dir, "db"),
 		LogDSN:       "local", // 日志库也走 SQLite：同一路径，验证能独立打开
 		MaxIdleConns: 2, MaxOpenConns: 4,
 	}

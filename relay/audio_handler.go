@@ -9,7 +9,7 @@ import (
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service"
+	relayerr "openapi/service/relayerr"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -54,9 +54,9 @@ func AudioHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.St
 	if resp != nil {
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
-			apiError = service.RelayErrorHandler(c.Request().Context(), httpResp, false)
+			apiError = relayerr.RelayErrorHandler(c.Request().Context(), httpResp, false)
 			// reset status code 重置状态码
-			service.ResetStatusCode(apiError, statusCodeMappingStr)
+			relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 			return apiError
 		}
 	}
@@ -64,7 +64,7 @@ func AudioHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.St
 	usage, apiError := adaptor.DoResponse(c, httpResp, info)
 	if apiError != nil {
 		// reset status code 重置状态码
-		service.ResetStatusCode(apiError, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 		return apiError
 	}
 	recordUsage(c, info, usage.(*dto.Usage), nil)

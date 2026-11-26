@@ -5,7 +5,7 @@ import (
 
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
+	relayerr "openapi/service/relayerr"
 	"openapi/types"
 
 	"github.com/gorilla/websocket"
@@ -38,7 +38,7 @@ func WssHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.Star
 	usage, apiError := adaptor.DoResponse(c, nil, info)
 	if apiError != nil {
 		// reset status code 重置状态码
-		service.ResetStatusCode(apiError, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 		return apiError
 	}
 	recordUsage(c, info, realtimeUsageToUsage(usage.(*dto.RealtimeUsage)), nil)

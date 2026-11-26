@@ -5,7 +5,7 @@ import (
 
 	"openapi/dto"
 	"openapi/logger"
-	"openapi/service"
+	"openapi/service/files"
 
 	gin "github.com/king54346/gin-tiny"
 )
@@ -101,17 +101,17 @@ type AliOutput struct {
 	} `json:"choices,omitempty"`
 }
 
-func (o *AliOutput) ChoicesToOpenAIImageDate(c gin.Context, responseFormat string) []dto.ImageData {
-	var imageData []dto.ImageData
+func (o *AliOutput) ChoicesToOpenAIImageDate(c gin.Context, responseFormat string) []ImageData {
+	var imageData []ImageData
 	if len(o.Choices) > 0 {
 		for _, choice := range o.Choices {
-			var data dto.ImageData
+			var data ImageData
 			for _, content := range choice.Message.Content {
 				if content.Image != "" {
 					if strings.HasPrefix(content.Image, "http") {
 						var b64Json string
 						if responseFormat == "b64_json" {
-							_, b64, err := service.GetImageFromUrl(content.Image)
+							_, b64, err := files.GetImageFromUrl(content.Image)
 							if err != nil {
 								logger.LogError(c, "get_image_data_failed: "+err.Error())
 								continue
@@ -134,12 +134,12 @@ func (o *AliOutput) ChoicesToOpenAIImageDate(c gin.Context, responseFormat strin
 	return imageData
 }
 
-func (o *AliOutput) ResultToOpenAIImageDate(c gin.Context, responseFormat string) []dto.ImageData {
-	var imageData []dto.ImageData
+func (o *AliOutput) ResultToOpenAIImageDate(c gin.Context, responseFormat string) []ImageData {
+	var imageData []ImageData
 	for _, data := range o.Results {
 		var b64Json string
 		if responseFormat == "b64_json" {
-			_, b64, err := service.GetImageFromUrl(data.Url)
+			_, b64, err := files.GetImageFromUrl(data.Url)
 			if err != nil {
 				logger.LogError(c, "get_image_data_failed: "+err.Error())
 				continue
@@ -149,7 +149,7 @@ func (o *AliOutput) ResultToOpenAIImageDate(c gin.Context, responseFormat string
 			b64Json = data.B64Image
 		}
 
-		imageData = append(imageData, dto.ImageData{
+		imageData = append(imageData, ImageData{
 			Url:           data.Url,
 			B64Json:       b64Json,
 			RevisedPrompt: "",

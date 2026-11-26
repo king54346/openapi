@@ -38,7 +38,7 @@ type GeneralErrorResponse struct {
 	} `json:"response"`
 }
 
-// TryToOpenAIError error 字段是带 message 的 OpenAI 错误对象时返回它，否则返回 nil。
+// TryToOpenAIError error 字段是带 message 的 tokens.OpenAI 错误对象时返回它，否则返回 nil。
 func (e GeneralErrorResponse) TryToOpenAIError() *types.OpenAIError {
 	if common.JSONKindOf(e.Error) != common.JSONObject {
 		return nil
@@ -50,7 +50,7 @@ func (e GeneralErrorResponse) TryToOpenAIError() *types.OpenAIError {
 	return &openAIError
 }
 
-// errorFieldMessage 从 error 字段取错误信息：OpenAI 错误对象取 message，字符串取其值，
+// errorFieldMessage 从 error 字段取错误信息：tokens.OpenAI 错误对象取 message，字符串取其值，
 // 数字、数组等原样返回文本；null、空值或取不到时返回空串。
 func (e GeneralErrorResponse) errorFieldMessage() string {
 	switch common.JSONKindOf(e.Error) {

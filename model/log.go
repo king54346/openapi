@@ -33,7 +33,6 @@ type Log struct {
 	ChannelId        int    `json:"channel" gorm:"index"`
 	ChannelName      string `json:"channel_name" gorm:"->"`
 	TokenId          int    `json:"token_id" gorm:"default:0;index"`
-	Group            string `json:"group" gorm:"index"`
 	Ip               string `json:"ip" gorm:"index;default:''"`
 	RequestId        string `json:"request_id,omitempty" gorm:"type:varchar(64);index:idx_logs_request_id;default:''"`
 	Other            string `json:"other"`
@@ -82,10 +81,10 @@ func RecordLog(userId int, logType int, content string) {
 }
 
 func RecordErrorLog(c gin.Context, userId int, channelId int, modelName string, tokenName string, content string, tokenId int, useTimeSeconds int,
-	isStream bool, group string, other map[string]interface{}) {
+	isStream bool, other map[string]interface{}) {
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, content))
 	username := c.GetString("username")
-	requestId := c.GetString(common.RequestIdKey)
+	requestId := c.GetString(RequestIdKey)
 	otherStr := common.MapToJsonStr(other)
 	log := &Log{
 		UserId:           userId,
@@ -102,7 +101,6 @@ func RecordErrorLog(c gin.Context, userId int, channelId int, modelName string, 
 		TokenId:          tokenId,
 		UseTime:          useTimeSeconds,
 		IsStream:         isStream,
-		Group:            group,
 		Ip:               c.ClientIP(),
 		RequestId:        requestId,
 		Other:            otherStr,
@@ -124,7 +122,6 @@ type RecordConsumeLogParams struct {
 	TokenId          int                    `json:"token_id"`
 	UseTimeSeconds   int                    `json:"use_time_seconds"`
 	IsStream         bool                   `json:"is_stream"`
-	Group            string                 `json:"group"`
 	Other            map[string]interface{} `json:"other"`
 }
 
@@ -134,7 +131,7 @@ func RecordConsumeLog(c gin.Context, userId int, params RecordConsumeLogParams) 
 	}
 	logger.LogInfo(c, fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
 	username := c.GetString("username")
-	requestId := c.GetString(common.RequestIdKey)
+	requestId := c.GetString(RequestIdKey)
 	otherStr := common.MapToJsonStr(params.Other)
 	log := &Log{
 		UserId:           userId,
@@ -151,7 +148,6 @@ func RecordConsumeLog(c gin.Context, userId int, params RecordConsumeLogParams) 
 		TokenId:          params.TokenId,
 		UseTime:          params.UseTimeSeconds,
 		IsStream:         params.IsStream,
-		Group:            params.Group,
 		Ip:               c.ClientIP(),
 		RequestId:        requestId,
 		Other:            otherStr,
@@ -167,7 +163,7 @@ func logLikePattern(s string) string {
 	return "%" + s + "%"
 }
 
-func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string) (logs []*Log, total int64, err error) {
+func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, requestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB
@@ -196,9 +192,6 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	if channel != 0 {
 		tx = tx.Where("logs.channel_id = ?", channel)
 	}
-	if group != "" {
-		tx = tx.Where("logs."+logGroupCol+" = ?", group)
-	}
 	err = tx.Model(&Log{}).Count(&total).Error
 	if err != nil {
 		return nil, 0, err
@@ -225,7 +218,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		}
 		channelMap := make(map[int]string, len(channels))
 		for _, channel := range channels {
-			channelMap[channel.Id] = channel.Name
+			channelMap[Id] = channel.Name
 		}
 		for i := range logs {
 			logs[i].ChannelName = channelMap[logs[i].ChannelId]
@@ -235,7 +228,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	return logs, total, err
 }
 
-func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, group string, requestId string) (logs []*Log, total int64, err error) {
+func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int64, modelName string, tokenName string, startIdx int, num int, requestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {
 		tx = LOG_DB.Where("logs.user_id = ?", userId)
@@ -257,9 +250,6 @@ func GetUserLogs(userId int, logType int, startTimestamp int64, endTimestamp int
 	}
 	if endTimestamp != 0 {
 		tx = tx.Where("logs.created_at <= ?", endTimestamp)
-	}
-	if group != "" {
-		tx = tx.Where("logs."+logGroupCol+" = ?", group)
 	}
 	err = tx.Model(&Log{}).Count(&total).Error
 	if err != nil {
@@ -294,7 +284,7 @@ type Stat struct {
 	Tpm   int `json:"tpm"`
 }
 
-func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int, group string) (stat Stat) {
+func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, channel int) (stat Stat) {
 	tx := LOG_DB.Table("logs").Select("sum(quota) quota")
 
 	// 为rpm和tpm创建单独的查询
@@ -321,10 +311,6 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	if channel != 0 {
 		tx = tx.Where("channel_id = ?", channel)
 		rpmTpmQuery = rpmTpmQuery.Where("channel_id = ?", channel)
-	}
-	if group != "" {
-		tx = tx.Where(logGroupCol+" = ?", group)
-		rpmTpmQuery = rpmTpmQuery.Where(logGroupCol+" = ?", group)
 	}
 
 	tx = tx.Where("type = ?", LogTypeConsume)
@@ -474,6 +460,19 @@ func GetTokenAnalytics(tokenId int, startTimestamp int64, endTimestamp int64) (*
 		DailyStats: dailyStats,
 		Summary:    summary,
 	}, nil
+}
+
+// GetTokenUsageSummary 汇总某个令牌的调用次数与 token 用量（全量统计，不做按日填充）。
+func GetTokenUsageSummary(tokenId int) (TokenAnalyticsSummary, error) {
+	var summary TokenAnalyticsSummary
+	err := LOG_DB.Table("logs").
+		Select("count(*) as total_calls, "+
+			"ifnull(sum(prompt_tokens),0) as total_prompt_tokens, "+
+			"ifnull(sum(completion_tokens),0) as total_completion_tokens, "+
+			"ifnull(sum(quota),0) as total_quota").
+		Where("token_id = ? AND type = ?", tokenId, LogTypeConsume).
+		Scan(&summary).Error
+	return summary, err
 }
 
 func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {

@@ -9,7 +9,9 @@ import (
 	"openapi/dto"
 	"openapi/model"
 	relayconstant "openapi/relay/constant"
-	"openapi/service"
+	"openapi/service/channels"
+	"openapi/service/dispatch"
+	"openapi/service/tasks"
 	"openapi/types"
 	"slices"
 	"strconv"
@@ -49,11 +51,6 @@ func Distribute() func(c gin.Context) {
 				return
 			}
 		} else {
-			userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
-			if modelRequest != nil && modelRequest.Model != "" && !service.IsUserGroupAllowedForExtraVisibleModel(userGroup, modelRequest.Model) {
-				abortWithOpenAiMessage(c, http.StatusForbidden, "当前用户分组无权调用模型 "+modelRequest.Model)
-				return
-			}
 			// Select a channel for the user
 			// check token model mapping
 			modelLimitEnable := common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled)
@@ -71,7 +68,7 @@ func Distribute() func(c gin.Context) {
 				if !ok {
 					tokenModelLimit = map[string]bool{}
 				}
-				matchName := service.FormatMatchingModelName(modelRequest.Model) // match gpts & thinking-*
+				matchName := dispatch.FormatMatchingModelName(modelRequest.Model) // match gpts & thinking-*
 				limitType, _ := c.Get("token_model_limit_type")
 				limitTypeInt, _ := limitType.(int)
 				if limitTypeInt == 1 {
@@ -94,72 +91,31 @@ func Distribute() func(c gin.Context) {
 					abortWithOpenAiMessage(c, http.StatusBadRequest, "未指定模型名称，模型名称不能为空")
 					return
 				}
-				var selectGroup string
-				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-				// check path is /pg/chat/completions
-				if strings.HasPrefix(c.Request().URL.Path, "/pg/chat/completions") {
-					playgroundRequest := &dto.PlayGroundRequest{}
-					err = common.UnmarshalBodyReusable(c, playgroundRequest)
-					if err != nil {
-						abortWithOpenAiMessage(c, http.StatusBadRequest, "无效的playground请求, "+err.Error())
-						return
-					}
-					if playgroundRequest.Group != "" {
-						if !service.GroupInUserUsableGroups(usingGroup, playgroundRequest.Group) && playgroundRequest.Group != usingGroup {
-							abortWithOpenAiMessage(c, http.StatusForbidden, "无权访问该分组")
-							return
-						}
-						usingGroup = playgroundRequest.Group
-						common.SetContextKey(c, constant.ContextKeyUsingGroup, usingGroup)
-					}
-				}
 
-				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
-					preferred, err := model.CacheGetChannel(preferredChannelID)
-					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled {
-						if usingGroup == "auto" {
-							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
-							autoGroups := service.GetUserAutoGroup(userGroup)
-							for _, g := range autoGroups {
-								if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) {
-									selectGroup = g
-									common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
-									channel = preferred
-									service.MarkChannelAffinityUsed(c, g, preferred.Id)
-									break
-								}
-							}
-						} else if model.IsChannelEnabledForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
-							channel = preferred
-							selectGroup = usingGroup
-							service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
-						}
+				// 亲和性优先：同会话复用上次成功的渠道
+				if preferredChannelID, found := channels.GetPreferredChannelByAffinity(c, modelRequest.Model); found {
+					if preferred, prefErr := model.CacheGetChannel(preferredChannelID); prefErr == nil && preferred != nil &&
+						preferred.Status == common.ChannelStatusEnabled &&
+						model.IsChannelEnabledForGroupModel("", modelRequest.Model, preferred.Id) {
+						channel = preferred
+						channels.MarkChannelAffinityUsed(c, preferred.Id)
 					}
 				}
 
 				if channel == nil {
-					channel, selectGroup, err = service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
-						Ctx:        c,
-						ModelName:  modelRequest.Model,
-						TokenGroup: usingGroup,
-						Retry:      common.GetPointer(0),
+					channel, err = dispatch.CacheGetRandomSatisfiedChannel(&dispatch.RetryParam{
+						Ctx:       c,
+						ModelName: modelRequest.Model,
+						Retry:     common.GetPointer(0),
 					})
 					if err != nil {
-						showGroup := usingGroup
-						if usingGroup == "auto" {
-							showGroup = fmt.Sprintf("auto(%s)", selectGroup)
-						}
-						message := fmt.Sprintf("获取分组 %s 下模型 %s 的可用渠道失败（distributor）: %s", showGroup, modelRequest.Model, err.Error())
-						// 如果错误，但是渠道不为空，说明是数据库一致性问题
-						//if channel != nil {
-						//	common.SysError(fmt.Sprintf("渠道不存在：%d", channel.Id))
-						//	message = "数据库一致性已被破坏，请联系管理员"
-						//}
-						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, types.ErrorCodeModelNotFound)
+						abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
+							fmt.Sprintf("获取模型 %s 的可用渠道失败（distributor）: %s", modelRequest.Model, err.Error()), types.ErrorCodeModelNotFound)
 						return
 					}
 					if channel == nil {
-						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, fmt.Sprintf("分组 %s 下模型 %s 无可用渠道（distributor）", usingGroup, modelRequest.Model), types.ErrorCodeModelNotFound)
+						abortWithOpenAiMessage(c, http.StatusServiceUnavailable,
+							fmt.Sprintf("模型 %s 无可用渠道（distributor）", modelRequest.Model), types.ErrorCodeModelNotFound)
 						return
 					}
 				}
@@ -169,7 +125,7 @@ func Distribute() func(c gin.Context) {
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 		c.Next()
 		if channel != nil && c.Response() != nil && c.Response().Status() < http.StatusBadRequest {
-			service.RecordChannelAffinity(c, channel.Id)
+			channels.RecordChannelAffinity(c, channel.Id)
 		}
 	}
 }
@@ -205,7 +161,7 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 			if err != nil {
 				return nil, false, errors.New("无效的midjourney请求, " + err.Error())
 			}
-			midjourneyModel, mjErr, success := service.GetMjRequestModel(relayMode, &midjourneyRequest)
+			midjourneyModel, mjErr, success := dispatch.GetMjRequestModel(relayMode, &midjourneyRequest)
 			if mjErr != nil {
 				return nil, false, fmt.Errorf("%s", mjErr.Description)
 			}
@@ -226,7 +182,7 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 			relayMode == relayconstant.RelayModeSunoFetchByID {
 			shouldSelectChannel = false
 		} else {
-			modelName := service.CoverTaskActionToModelName(constant.TaskPlatformSuno, c.Param("action"))
+			modelName := tasks.CoverTaskActionToModelName(constant.TaskPlatformSuno, c.Param("action"))
 			modelRequest.Model = modelName
 		}
 		c.Set("platform", string(constant.TaskPlatformSuno))
@@ -280,7 +236,7 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 			shouldSelectChannel = false
 		}
 	} else if strings.HasPrefix(c.Request().URL.Path, "/v1beta/models/") || strings.HasPrefix(c.Request().URL.Path, "/v1/models/") {
-		// Gemini API 路径处理: /v1beta/models/gemini-2.0-flash:generateContent
+		// tokens.Gemini API 路径处理: /v1beta/models/gemini-2.0-flash:generateContent
 		relayMode := relayconstant.RelayModeGemini
 		modelName := extractModelNameFromGeminiPath(c.Request().URL.Path)
 		if modelName != "" {
@@ -370,12 +326,10 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 			return nil, false, err
 		}
 		modelRequest.Model = req.Model
-		modelRequest.Group = req.Group
-		common.SetContextKey(c, constant.ContextKeyTokenGroup, modelRequest.Group)
 	}
 
 	if strings.HasPrefix(c.Request().URL.Path, "/v1/responses/compact") && modelRequest.Model != "" {
-		modelRequest.Model = service.WithCompactModelSuffix(modelRequest.Model)
+		modelRequest.Model = dispatch.WithCompactModelSuffix(modelRequest.Model)
 	}
 	return &modelRequest, shouldSelectChannel, nil
 }
@@ -417,29 +371,48 @@ func SetupContextForSelectedChannel(c gin.Context, channel *model.Channel, model
 
 	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, false)
 
-	// TODO: api_version统一
-	switch channel.Type {
-	case constant.ChannelTypeAzure:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeVertexAi:
-		c.Set("region", channel.Other)
-	case constant.ChannelTypeXunfei:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeGemini:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeAli:
-		c.Set("plugin", channel.Other)
-	case constant.ChannelCloudflare:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeMokaAI:
-		c.Set("api_version", channel.Other)
-	case constant.ChannelTypeCoze:
-		c.Set("bot_id", channel.Other)
-	}
+	// 渠道的 Other 列在不同渠道类型下含义不同，统一在这里写入上下文
+	SetupChannelOtherContext(c, channel)
 	return nil
 }
 
-// extractModelNameFromGeminiPath 从 Gemini API URL 路径中提取模型名
+// SetupChannelOtherContext 把渠道 Other 列解析出的附加信息写入上下文：
+// 版本号类渠道写 api_version（渠道未配置时回退到请求 Query，tokens.Gemini 再回退到默认版本），
+// Vertex AI 写 region，阿里写 plugin，Coze 写 bot_id。
+func SetupChannelOtherContext(c gin.Context, channel *model.Channel) {
+	if channel == nil {
+		return
+	}
+	other := strings.TrimSpace(channel.Other)
+	switch channel.Type {
+	case constant.ChannelTypeAzure, constant.ChannelTypeXunfei,
+		constant.ChannelCloudflare, constant.ChannelTypeMokaAI, constant.ChannelTypeGemini:
+		version := other
+		if version == "" {
+			version = strings.TrimSpace(c.Query("api_version"))
+		}
+		if version == "" && channel.Type == constant.ChannelTypeGemini {
+			version = "v1beta"
+		}
+		if version != "" {
+			c.Set("api_version", version)
+		}
+	case constant.ChannelTypeVertexAi:
+		if other != "" {
+			c.Set("region", other)
+		}
+	case constant.ChannelTypeAli:
+		if other != "" {
+			c.Set("plugin", other)
+		}
+	case constant.ChannelTypeCoze:
+		if other != "" {
+			c.Set("bot_id", other)
+		}
+	}
+}
+
+// extractModelNameFromGeminiPath 从 tokens.Gemini API URL 路径中提取模型名
 // 输入格式: /v1beta/models/gemini-2.0-flash:generateContent
 // 输出: gemini-2.0-flash
 func extractModelNameFromGeminiPath(path string) string {

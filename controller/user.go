@@ -77,7 +77,6 @@ func Login(c gin.Context) {
 	session.Set("username", user.Username)
 	session.Set("role", user.Role)
 	session.Set("status", user.Status)
-	session.Set("group", user.Group)
 	if err := session.Save(); err != nil {
 		apiError(c, err)
 		return
@@ -88,7 +87,6 @@ func Login(c gin.Context) {
 		"display_name": user.DisplayName,
 		"role":         user.Role,
 		"status":       user.Status,
-		"group":        user.Group,
 	})
 }
 
@@ -128,7 +126,7 @@ func GenerateAccessToken(c gin.Context) {
 // GetAllUsers 分页列出用户。
 func GetAllUsers(c gin.Context) {
 	page := common.GetPageQuery(c)
-	users, total, err := model.GetAllUsers(page.GetStartIdx(), page.GetPageSize())
+	users, total, err := GetAllUsers(page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
@@ -139,7 +137,7 @@ func GetAllUsers(c gin.Context) {
 // SearchUsers 按 keyword（id/用户名/显示名/邮箱）与 group 搜索用户。
 func SearchUsers(c gin.Context) {
 	page := common.GetPageQuery(c)
-	users, total, err := model.SearchUsers(c.Query("keyword"), c.Query("group"), page.GetStartIdx(), page.GetPageSize())
+	users, total, err := SearchUsers(c.Query("keyword"), page.GetStartIdx(), page.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
@@ -186,7 +184,6 @@ func CreateUser(c gin.Context) {
 		Username    string `json:"username"`
 		Password    string `json:"password"`
 		DisplayName string `json:"display_name"`
-		Group       string `json:"group"`
 		Role        int    `json:"role"`
 		Remark      string `json:"remark"`
 	}
@@ -217,7 +214,6 @@ func CreateUser(c gin.Context) {
 	user := &model.User{
 		Username:    req.Username,
 		DisplayName: req.DisplayName,
-		Group:       req.Group,
 		Role:        req.Role,
 		Remark:      req.Remark,
 	}
@@ -240,7 +236,6 @@ func UpdateUser(c gin.Context) {
 		Password    string  `json:"password"`
 		DisplayName *string `json:"display_name"`
 		Email       *string `json:"email"`
-		Group       *string `json:"group"`
 		Quota       *int    `json:"quota"`
 		Remark      *string `json:"remark"`
 	}
@@ -272,9 +267,6 @@ func UpdateUser(c gin.Context) {
 	}
 	if req.Email != nil {
 		fields["email"] = *req.Email
-	}
-	if req.Group != nil && *req.Group != "" {
-		fields["group"] = *req.Group
 	}
 	if req.Quota != nil {
 		fields["quota"] = *req.Quota
@@ -373,34 +365,4 @@ func ManageUser(c gin.Context) {
 		return
 	}
 	apiSuccess(c, gin.H{"role": updated.Role, "status": updated.Status})
-}
-
-// BatchUpdateUserGroup 批量修改用户分组，请求体 {"ids": [...], "group": "vip"}。
-// 只会修改当前管理员有权管理的用户。
-func BatchUpdateUserGroup(c gin.Context) {
-	var req struct {
-		Ids   []int  `json:"ids"`
-		Group string `json:"group"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.Ids) == 0 || strings.TrimSpace(req.Group) == "" {
-		apiErrorMsg(c, "ids and group are required")
-		return
-	}
-	myId, myRole := c.GetInt("id"), c.GetInt("role")
-	var allowed []int
-	for _, id := range req.Ids {
-		if user, err := model.GetUserById(id); err == nil && canManage(myId, myRole, user) {
-			allowed = append(allowed, id)
-		}
-	}
-	if len(allowed) == 0 {
-		apiErrorMsg(c, "no permission to manage these users")
-		return
-	}
-	rows, err := model.BatchUpdateUserGroup(allowed, strings.TrimSpace(req.Group))
-	if err != nil {
-		apiError(c, err)
-		return
-	}
-	apiSuccess(c, rows)
 }

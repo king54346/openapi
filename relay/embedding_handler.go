@@ -10,7 +10,7 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service"
+	relayerr "openapi/service/relayerr"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -69,9 +69,9 @@ func EmbeddingHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *type
 	if resp != nil {
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
-			apiError = service.RelayErrorHandler(c.Request().Context(), httpResp, false)
+			apiError = relayerr.RelayErrorHandler(c.Request().Context(), httpResp, false)
 			// reset status code 重置状态码
-			service.ResetStatusCode(apiError, statusCodeMappingStr)
+			relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 			return apiError
 		}
 	}
@@ -79,7 +79,7 @@ func EmbeddingHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *type
 	usage, apiError := adaptor.DoResponse(c, httpResp, info)
 	if apiError != nil {
 		// reset status code 重置状态码
-		service.ResetStatusCode(apiError, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 		return apiError
 	}
 	recordUsage(c, info, usage.(*dto.Usage), nil)

@@ -11,14 +11,14 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service"
+	"openapi/service/tokens"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
 )
 
 func OaiResponsesHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.StarAPIError) {
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	// read response body
 	var responsesResponse dto.OpenAIResponsesResponse
@@ -41,7 +41,7 @@ func OaiResponsesHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.
 	}
 
 	// 写入新的 response body
-	service.IOCopyBytesGracefully(c, resp, responseBody)
+	httpclient.IOCopyBytesGracefully(c, resp, responseBody)
 
 	// compute usage
 	usage := dto.Usage{}
@@ -74,7 +74,7 @@ func OaiResponsesStreamHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 		return nil, types.NewError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse)
 	}
 
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	var usage = &dto.Usage{}
 	var responseTextBuilder strings.Builder
@@ -135,14 +135,14 @@ func OaiResponsesStreamHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 		tempStr := responseTextBuilder.String()
 		if len(tempStr) > 0 {
 			// 非正常结束，使用输出文本的 token 数量
-			usage.CompletionTokens = service.CountTextToken(tempStr, info.UpstreamModelName)
-			service.MarkUsageEstimated(c)
+			usage.CompletionTokens = tokens.CountTextToken(tempStr, info.UpstreamModelName)
+			tokens.MarkUsageEstimated(c)
 		}
 	}
 
 	if usage.PromptTokens == 0 && usage.CompletionTokens != 0 {
 		usage.PromptTokens = info.GetEstimatePromptTokens()
-		service.MarkUsageEstimated(c)
+		tokens.MarkUsageEstimated(c)
 	}
 
 	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens

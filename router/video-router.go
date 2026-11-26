@@ -37,14 +37,14 @@ func SetVideoRouter(router *gin.Engine) {
 		videoV1Router.POST("/videos/:video_id/remix", controller.RelayTask)
 	}
 
-	// ==================== OpenAI 兼容格式视频 API 路由 ====================
+	// ==================== tokens.OpenAI 兼容格式视频 API 路由 ====================
 	// 参考文档: https://platform.openai.com/docs/api-reference/videos/create
-	// 提供与 OpenAI 视频 API 兼容的接口格式
+	// 提供与 tokens.OpenAI 视频 API 兼容的接口格式
 	{
-		// POST /v1/videos - 创建视频（OpenAI 兼容格式）
+		// POST /v1/videos - 创建视频（tokens.OpenAI 兼容格式）
 		videoV1Router.POST("/videos", controller.RelayTask)
 
-		// GET /v1/videos/:task_id - 查询视频任务（OpenAI 兼容格式）
+		// GET /v1/videos/:task_id - 查询视频任务（tokens.OpenAI 兼容格式）
 		videoV1Router.GET("/videos/:task_id", controller.RelayTask)
 	}
 }

@@ -18,7 +18,10 @@ import (
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
 	"openapi/relay/helper"
-	"openapi/service"
+	"openapi/service/channels"
+	"openapi/service/dispatch"
+	"openapi/service/relayerr"
+	"openapi/service/tokens"
 	"openapi/types"
 
 	"github.com/gorilla/websocket"
@@ -53,12 +56,6 @@ func Relay(c gin.Context, relayFormat types.RelayFormat) {
 		}
 	}()
 
-	if relayFormat == types.RelayFormatClaude || relayFormat == types.RelayFormatGemini {
-		apiErr = types.NewErrorWithStatusCode(fmt.Errorf("request format %s is not supported", relayFormat),
-			types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
-		return
-	}
-
 	request, err := helper.GetAndValidateRequest(c, relayFormat)
 	if err != nil {
 		apiErr = requestBodyError(err)
@@ -70,7 +67,7 @@ func Relay(c gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 	// 估算 prompt token，上游未返回 usage 时用于记录用量；估算失败不影响转发
-	if promptTokens, err := service.EstimateRequestToken(c, request.GetTokenCountMeta(), info); err != nil {
+	if promptTokens, err := tokens.EstimateRequestToken(c, request.GetTokenCountMeta(), info); err != nil {
 		logger.LogWarn(c, "estimate prompt tokens failed: "+err.Error())
 	} else {
 		info.SetEstimatePromptTokens(promptTokens)
@@ -82,7 +79,7 @@ func Relay(c gin.Context, relayFormat types.RelayFormat) {
 		addUsedChannel(c, channelID)
 		apiErr = relayOnce(c, info, relayFormat)
 		if apiErr == nil {
-			service.RecordChannelSuccess(channelID)
+			channels.RecordChannelSuccess(channelID)
 			return
 		}
 		processChannelError(c, info, apiErr, attempt)
@@ -108,25 +105,23 @@ func requestBodyError(err error) *types.StarAPIError {
 
 // selectRetryChannel 按 retry 档位重新选渠道并写入上下文；没有可用渠道时返回错误。
 func selectRetryChannel(c gin.Context, modelName string, retry int) (*model.Channel, *types.StarAPIError) {
-	group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
-	channel, selectGroup, err := service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
-		Ctx:        c,
-		ModelName:  modelName,
-		TokenGroup: group,
-		Retry:      &retry,
+	channel, err := dispatch.CacheGetRandomSatisfiedChannel(&dispatch.RetryParam{
+		Ctx:       c,
+		ModelName: modelName,
+		Retry:     &retry,
 	})
 	if err != nil {
-		return nil, types.NewError(fmt.Errorf("failed to get channel for group %s model %s (retry): %w", selectGroup, modelName, err),
+		return nil, types.NewError(fmt.Errorf("failed to get channel for model %s (retry): %w", modelName, err),
 			types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if channel == nil {
-		return nil, types.NewError(fmt.Errorf("no available channel for group %s model %s (retry)", selectGroup, modelName),
+		return nil, types.NewError(fmt.Errorf("no available channel for model %s (retry)", modelName),
 			types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
 	if setupErr := middleware.SetupContextForSelectedChannel(c, channel, modelName); setupErr != nil {
 		return nil, setupErr
 	}
-	logger.LogInfo(c, fmt.Sprintf("retrying with channel #%d", channel.Id))
+	logger.LogInfo(c, fmt.Sprintf("retrying with channel #%d", Id))
 	return channel, nil
 }
 
@@ -148,7 +143,7 @@ func processChannelError(c gin.Context, info *relaycommon.RelayInfo, apiErr *typ
 	logger.LogError(c, fmt.Sprintf("relay failed (channel #%d, attempt %d, status %d): %s",
 		channelID, attempt+1, apiErr.StatusCode, apiErr.MaskSensitiveError()))
 	recordRelayErrorLog(c, info, apiErr, channelID, attempt)
-	service.RecordChannelFailure(channelID,
+	channels.RecordChannelFailure(channelID,
 		common.GetContextKeyString(c, constant.ContextKeyChannelKey),
 		common.GetContextKeyBool(c, constant.ContextKeyChannelAutoBan),
 		apiErr)
@@ -177,13 +172,17 @@ func recordRelayErrorLog(c gin.Context, info *relaycommon.RelayInfo, apiErr *typ
 	}
 	model.RecordErrorLog(c, info.UserId, channelID, info.OriginModelName, c.GetString("token_name"),
 		apiErr.MaskSensitiveErrorWithStatusCode(), info.TokenId, int(time.Since(info.StartTime).Seconds()),
-		info.IsStream, info.UsingGroup, other)
+		info.IsStream, other)
 }
 
 // relayOnce 用当前上下文中的渠道转发一次。
 func relayOnce(c gin.Context, info *relaycommon.RelayInfo, relayFormat types.RelayFormat) *types.StarAPIError {
 	if relayFormat == types.RelayFormatOpenAIRealtime {
 		return relay.WssHelper(c, info)
+	}
+	// /v1/messages：tokens.Claude 原生协议直连或跨协议转发
+	if relayFormat == types.RelayFormatClaude {
+		return relay.ClaudeHelper(c, info)
 	}
 	switch info.RelayMode {
 	case relayconstant.RelayModeImagesGenerations, relayconstant.RelayModeImagesEdits, relayconstant.RelayModeEdits:
@@ -279,7 +278,7 @@ func RelayTask(c gin.Context) {
 
 	info, err := relaycommon.GenRelayInfo(c, types.RelayFormatTask, nil, nil)
 	if err != nil {
-		taskErr = service.TaskErrorWrapperLocal(err, "gen_relay_info_failed", http.StatusInternalServerError)
+		taskErr = relayerr.TaskErrorWrapperLocal(err, "gen_relay_info_failed", http.StatusInternalServerError)
 		return
 	}
 	defer logRetryPath(c)
@@ -289,7 +288,7 @@ func RelayTask(c gin.Context) {
 		addUsedChannel(c, channelID)
 		taskErr = relay.RelayTaskSubmit(c, info)
 		if taskErr == nil {
-			service.RecordChannelSuccess(channelID)
+			channels.RecordChannelSuccess(channelID)
 			return
 		}
 		logger.LogError(c, fmt.Sprintf("task relay failed (channel #%d, attempt %d, status %d): %s",
@@ -319,7 +318,7 @@ func shouldRetryTaskRelay(c gin.Context, taskErr *dto.TaskError, remaining int) 
 	return retryableStatus(taskErr.StatusCode)
 }
 
-// openAIModel OpenAI /v1/models 返回的单个模型。
+// openAIModel tokens.OpenAI /v1/models 返回的单个模型。
 type openAIModel struct {
 	Id      string `json:"id"`
 	Object  string `json:"object"`
@@ -329,7 +328,7 @@ type openAIModel struct {
 
 // usableModels 返回当前令牌可调用的模型：分组下有可用渠道，并满足令牌的模型黑白名单。
 func usableModels(c gin.Context) []string {
-	models := model.GetGroupModels(common.GetContextKeyString(c, constant.ContextKeyUsingGroup))
+	models := model.GetEnabledModels()
 	if !common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled) {
 		return models
 	}
@@ -351,7 +350,7 @@ func toOpenAIModel(name string) openAIModel {
 	return openAIModel{Id: name, Object: "model", Created: common.StartTime, OwnedBy: "openapi"}
 }
 
-// ListModels 列出令牌可用的模型（统一返回 OpenAI 格式）。
+// ListModels 列出令牌可用的模型（统一返回 tokens.OpenAI 格式）。
 func ListModels(c gin.Context, channelType int) {
 	models := usableModels(c)
 	data := make([]openAIModel, 0, len(models))
@@ -361,7 +360,7 @@ func ListModels(c gin.Context, channelType int) {
 	c.JSON(http.StatusOK, gin.H{"object": "list", "data": data})
 }
 
-// RetrieveModel 查询单个模型是否可用（统一返回 OpenAI 格式）。
+// RetrieveModel 查询单个模型是否可用（统一返回 tokens.OpenAI 格式）。
 func RetrieveModel(c gin.Context, channelType int) {
 	name := strings.TrimPrefix(c.Param("model"), "/")
 	for _, m := range usableModels(c) {

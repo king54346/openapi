@@ -151,7 +151,7 @@ func TestChannelAdminAPI(t *testing.T) {
 		"mode": "single",
 		"channel": map[string]any{
 			"name": "openai-1", "type": constant.ChannelTypeOpenAI, "key": "sk-secret",
-			"models": "gpt-4o,gpt-4o-mini", "group": "default,vip",
+			"models": "gpt-4o,gpt-4o-mini",
 		},
 	}
 	// 普通用户无权管理渠道
@@ -178,7 +178,7 @@ func TestChannelAdminAPI(t *testing.T) {
 		}
 	}
 	// 新增后立即进入渠道缓存
-	if ch, _ := model.GetRandomSatisfiedChannel("vip", "gpt-4o-mini", 0); ch == nil {
+	if ch, _ := model.GetRandomSatisfiedChannel("", "gpt-4o-mini", 0); ch == nil {
 		t.Fatal("new channel should be in cache immediately")
 	}
 	openaiID := list.Items[2].Id
@@ -188,10 +188,10 @@ func TestChannelAdminAPI(t *testing.T) {
 		t.Fatalf("unexpected channel: %+v", got)
 	}
 
-	// 修改：去掉 vip 分组，缓存随之更新
-	s.ok(admin, http.MethodPut, "/api/channel/", map[string]any{"id": openaiID, "group": "default", "name": "openai-renamed"})
-	if ch, _ := model.GetRandomSatisfiedChannel("vip", "gpt-4o-mini", 0); ch != nil {
-		t.Fatal("channel removed from vip should leave cache")
+	// 修改名称后缓存仍应可用
+	s.ok(admin, http.MethodPut, "/api/channel/", map[string]any{"id": openaiID, "name": "openai-renamed"})
+	if ch, _ := model.GetRandomSatisfiedChannel("", "gpt-4o-mini", 0); ch == nil {
+		t.Fatal("renamed channel should stay in cache")
 	}
 	stored, _ := model.GetChannelById(openaiID, true)
 	if stored.Name != "openai-renamed" || stored.Key != "sk-secret" {
@@ -231,7 +231,7 @@ func TestUserAdminAPI(t *testing.T) {
 
 	created := decode[model.User](t, s.ok(admin, http.MethodPost, "/api/user/", map[string]any{
 		"username": "bob", "password": "password123", "display_name": "Bob"}))
-	if created.Role != common.RoleCommonUser || created.Group != "default" {
+	if created.Role != common.RoleCommonUser {
 		t.Fatalf("unexpected created user: %+v", created)
 	}
 	s.fail(admin, http.MethodPost, "/api/user/", map[string]any{"username": "bob", "password": "password123"}) // 重名
@@ -247,7 +247,7 @@ func TestUserAdminAPI(t *testing.T) {
 	s.ok(root, http.MethodPost, "/api/user/manage", map[string]any{"id": created.Id, "action": "demote"})
 
 	// 修改资料并重置密码，新密码可登录
-	s.ok(admin, http.MethodPut, "/api/user/", map[string]any{"id": created.Id, "display_name": "Bobby", "group": "vip", "password": "newpassword1"})
+	s.ok(admin, http.MethodPut, "/api/user/", map[string]any{"id": created.Id, "display_name": "Bobby", "password": "newpassword1"})
 	if _, err := model.ValidateUserLogin("bob", "newpassword1"); err != nil {
 		t.Fatalf("login with new password: %v", err)
 	}
@@ -256,13 +256,9 @@ func TestUserAdminAPI(t *testing.T) {
 	if list.Total != 3 || len(list.Items) != 2 {
 		t.Fatalf("expected total 3 / page 2, got %d / %d", list.Total, len(list.Items))
 	}
-	search := decode[page[model.User]](t, s.ok(admin, http.MethodGet, "/api/user/search?keyword=bob&group=vip", nil))
+	search := decode[page[model.User]](t, s.ok(admin, http.MethodGet, "/api/user/search?keyword=bob", nil))
 	if search.Total != 1 || search.Items[0].DisplayName != "Bobby" {
 		t.Fatalf("search: %+v", search)
-	}
-	s.ok(admin, http.MethodPost, "/api/user/batch/group", map[string]any{"ids": []int{created.Id}, "group": "svip"})
-	if u, _ := model.GetUserCache(created.Id); u.Group != "svip" {
-		t.Fatalf("group change should invalidate cache, got %s", u.Group)
 	}
 
 	s.ok(admin, http.MethodDelete, fmt.Sprintf("/api/user/%d", created.Id), nil)
@@ -299,7 +295,7 @@ func TestLoginSessionAndTokenAPI(t *testing.T) {
 	if len(tk.Key) != 48 || tk.Status != common.TokenStatusEnabled {
 		t.Fatalf("unexpected token: %+v", tk)
 	}
-	s.fail(aliceSession, http.MethodPost, "/api/token/", map[string]any{"name": "t2", "group": "vip"}) // 无权使用 vip 分组
+	s.ok(aliceSession, http.MethodPost, "/api/token/", map[string]any{"name": "t2", "group": "vip"}) // 分组已移除，group 参数被忽略
 	s.fail(aliceSession, http.MethodPost, "/api/token/", map[string]any{"name": "t3", "expired_time": time.Now().Add(-time.Hour).Unix()})
 
 	if _, err := model.ValidateUserToken(tk.Key); err != nil {

@@ -22,7 +22,6 @@ import (
 	"openapi/middleware"
 	"openapi/model"
 	"openapi/router"
-	"openapi/service"
 	"openapi/service/cron"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -135,7 +134,7 @@ func InitResources() (*gorm.DB, *gorm.DB, error) {
 		return nil, nil, fmt.Errorf("setup logger: %w", err)
 	}
 
-	service.InitHttpClient()
+	httpclient.InitHttpClient()
 
 	// 请求体磁盘缓存：读取配置，并清理上次异常退出残留的缓存文件
 	system.LoadDiskCacheConfigFromEnv()
@@ -155,6 +154,11 @@ func InitResources() (*gorm.DB, *gorm.DB, error) {
 	}
 	if err := model.InitDB(mainDB, logsDB); err != nil {
 		return fail(fmt.Errorf("migrate database: %w", err))
+	}
+
+	// 系统配置：options 表的键值同步到运行时配置（公告、分组、Turnstile、亲和性开关等）
+	if err := model.LoadOptionsFromDB(); err != nil {
+		return fail(fmt.Errorf("load options: %w", err))
 	}
 
 	// 渠道缓存：启动时加载，之后每 SYNC_FREQUENCY 秒从数据库重建

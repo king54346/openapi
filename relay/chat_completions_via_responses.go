@@ -12,7 +12,8 @@ import (
 	openaichannel "openapi/relay/channel/openai"
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
-	"openapi/service"
+	"openapi/service/compat"
+	relayerr "openapi/service/relayerr"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -93,7 +94,7 @@ func chatCompletionsViaResponses(c gin.Context, info *relaycommon.RelayInfo, ada
 		return nil, types.NewError(err, types.ErrorCodeChannelParamOverrideInvalid, types.ErrOptionWithSkipRetry())
 	}
 
-	responsesReq, err := service.ChatCompletionsRequestToResponsesRequest(&overriddenChatReq)
+	responsesReq, err := compat.ChatCompletionsRequestToResponsesRequest(&overriddenChatReq)
 	if err != nil {
 		return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
@@ -139,15 +140,15 @@ func chatCompletionsViaResponses(c gin.Context, info *relaycommon.RelayInfo, ada
 	httpResp = resp.(*http.Response)
 	info.IsStream = info.IsStream || strings.HasPrefix(httpResp.Header.Get("Content-Type"), "text/event-stream")
 	if httpResp.StatusCode != http.StatusOK {
-		apiErr := service.RelayErrorHandler(c.Request().Context(), httpResp, false)
-		service.ResetStatusCode(apiErr, statusCodeMappingStr)
+		apiErr := relayerr.RelayErrorHandler(c.Request().Context(), httpResp, false)
+		relayerr.ResetStatusCode(apiErr, statusCodeMappingStr)
 		return nil, apiErr
 	}
 
 	if info.IsStream {
 		usage, apiErr := openaichannel.OaiResponsesToChatStreamHandler(c, info, httpResp)
 		if apiErr != nil {
-			service.ResetStatusCode(apiErr, statusCodeMappingStr)
+			relayerr.ResetStatusCode(apiErr, statusCodeMappingStr)
 			return nil, apiErr
 		}
 		return usage, nil
@@ -155,7 +156,7 @@ func chatCompletionsViaResponses(c gin.Context, info *relaycommon.RelayInfo, ada
 
 	usage, apiErr := openaichannel.OaiResponsesToChatHandler(c, info, httpResp)
 	if apiErr != nil {
-		service.ResetStatusCode(apiErr, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiErr, statusCodeMappingStr)
 		return nil, apiErr
 	}
 	return usage, nil

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"openapi/common"
@@ -30,11 +31,31 @@ func callStub(t *testing.T, h gin.HandlerFunc) (int, map[string]string) {
 	return res.StatusCode, body
 }
 
+// TestStubsReturn501 明确保留的 501 接口：计费/充值/订阅、双因素认证与 Passkey。
+// 这些能力不在本项目实现范围内，接口保留以兼容前端调用。
 func TestStubsReturn501(t *testing.T) {
 	stubs := map[string]gin.HandlerFunc{
-		"GetStatus": func(c gin.Context) { GetStatus(c) },
-		"GetAbout":  func(c gin.Context) { GetAbout(c) },
-		"GetNotice": func(c gin.Context) { GetNotice(c) },
+		"GetPricing":             GetPricing,
+		"GetRatioConfig":         GetRatioConfig,
+		"ResetModelRatio":        ResetModelRatio,
+		"GetAllTopUps":           GetAllTopUps,
+		"AdminCompleteTopUp":     AdminCompleteTopUp,
+		"GetSubscriptionPlans":   GetSubscriptionPlans,
+		"GetSubscriptionSelf":    GetSubscriptionSelf,
+		"UpdateSelf":             UpdateSelf,
+		"DeleteSelf":             DeleteSelf,
+		"Verify2FALogin":         Verify2FALogin,
+		"PasskeyLoginBegin":      PasskeyLoginBegin,
+		"PasskeyLoginFinish":     PasskeyLoginFinish,
+		"UniversalVerify":        UniversalVerify,
+		"GetVerificationStatus":  GetVerificationStatus,
+		"Admin2FAStats":          Admin2FAStats,
+		"AdminDisable2FA":        AdminDisable2FA,
+		"AdminResetPasskey":      AdminResetPasskey,
+		"FetchUpstreamRatios":    FetchUpstreamRatios,
+		"GetSyncableChannels":    GetSyncableChannels,
+		"GetPeakValleyTimeInfo":  GetPeakValleyTimeInfo,
+		"DownloadWebStarPackage": DownloadWebStarPackage,
 	}
 	for name, h := range stubs {
 		code, body := callStub(t, h)
@@ -47,20 +68,20 @@ func TestStubsReturn501(t *testing.T) {
 	}
 }
 
-func TestRelayRejectsUnsupportedFormat(t *testing.T) {
-	for _, format := range []types.RelayFormat{types.RelayFormatClaude, types.RelayFormatGemini} {
-		w := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(w)
-		Relay(c, format)
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("%s: expected 400, got %d", format, w.Code)
-		}
-		var body struct {
-			Error types.OpenAIError `json:"error"`
-		}
-		if err := json.NewDecoder(w.Body).Decode(&body); err != nil || body.Error.Message == "" {
-			t.Fatalf("%s: expected OpenAI error body, err=%v body=%+v", format, err, body)
-		}
+// TestRelayRejectsUnknownFormat 未知的转发格式在解析阶段就被拒绝。
+func TestRelayRejectsUnknownFormat(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.SetRequest(httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("{}")))
+	Relay(c, types.RelayFormat("bogus"))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	var body struct {
+		Error types.OpenAIError `json:"error"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil || body.Error.Message == "" {
+		t.Fatalf("expected tokens.OpenAI error body, err=%v body=%+v", err, body)
 	}
 }
 

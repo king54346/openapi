@@ -12,7 +12,7 @@ import (
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
 	"openapi/relay/helper"
-	"openapi/service"
+	relayerr "openapi/service/relayerr"
 	"openapi/setting"
 	"openapi/types"
 
@@ -87,7 +87,7 @@ func ResponsesHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *type
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 		}
 
-		// remove disabled fields for OpenAI Responses API
+		// remove disabled fields for tokens.OpenAI Responses API
 		jsonData, err = relaycommon.RemoveDisabledFields(jsonData, info.ChannelOtherSettings)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -119,9 +119,9 @@ func ResponsesHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *type
 		httpResp = resp.(*http.Response)
 
 		if httpResp.StatusCode != http.StatusOK {
-			apiError = service.RelayErrorHandler(c.Request().Context(), httpResp, false)
+			apiError = relayerr.RelayErrorHandler(c.Request().Context(), httpResp, false)
 			// reset status code 重置状态码
-			service.ResetStatusCode(apiError, statusCodeMappingStr)
+			relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 			return apiError
 		}
 	}
@@ -129,7 +129,7 @@ func ResponsesHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *type
 	usage, apiError := adaptor.DoResponse(c, httpResp, info)
 	if apiError != nil {
 		// reset status code 重置状态码
-		service.ResetStatusCode(apiError, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 		return apiError
 	}
 

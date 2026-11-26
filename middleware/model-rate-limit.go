@@ -9,7 +9,6 @@ import (
 
 	"openapi/common"
 	"openapi/common/limiter"
-	"openapi/constant"
 	"openapi/setting"
 
 	gin "github.com/king54346/gin-tiny"
@@ -122,15 +121,6 @@ func ModelRequestRateLimit() gin.HandlerFunc {
 		duration := int64(cfg.ModelRequestRateLimitDurationMinutes * 60)
 		totalMaxCount := cfg.ModelRequestRateLimitCount
 		successMaxCount := cfg.ModelRequestRateLimitSuccessCount
-
-		group := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
-		if group == "" {
-			group = common.GetContextKeyString(c, constant.ContextKeyUserGroup)
-		}
-		if groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group); found {
-			totalMaxCount = groupTotalCount
-			successMaxCount = groupSuccessCount
-		}
 
 		if common.RedisEnabled {
 			redisRateLimitHandler(duration, totalMaxCount, successMaxCount)(c)

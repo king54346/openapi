@@ -12,7 +12,7 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service"
+	relayerr "openapi/service/relayerr"
 	"openapi/setting"
 	"openapi/types"
 
@@ -94,9 +94,9 @@ func ImageHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.St
 		httpResp = resp.(*http.Response)
 		info.IsStream = info.IsStream || strings.HasPrefix(httpResp.Header.Get("Content-Type"), "text/event-stream")
 		if httpResp.StatusCode != http.StatusOK {
-			apiError = service.RelayErrorHandler(c.Request().Context(), httpResp, false)
+			apiError = relayerr.RelayErrorHandler(c.Request().Context(), httpResp, false)
 			// reset status code 重置状态码
-			service.ResetStatusCode(apiError, statusCodeMappingStr)
+			relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 			return apiError
 		}
 	}
@@ -104,7 +104,7 @@ func ImageHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.St
 	usage, apiError := adaptor.DoResponse(c, httpResp, info)
 	if apiError != nil {
 		// reset status code 重置状态码
-		service.ResetStatusCode(apiError, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 		return apiError
 	}
 

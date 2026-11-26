@@ -32,7 +32,6 @@ var apiPathPrefixes = []string{"/api", "/v1", "/pg", "/kling", "/jimeng"}
 func SetRouter(router *gin.Engine, buildFS embed.FS, indexPage []byte) {
 	// 注册 API 路由（管理接口、用户接口、系统接口等）
 	SetApiRouter(router)
-
 	// 注册中继路由（AI 模型请求转发）
 	SetRelayRouter(router)
 

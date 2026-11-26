@@ -12,7 +12,6 @@ import (
 	"openapi/constant"
 	"openapi/logger"
 	"openapi/model"
-	"openapi/service"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -146,8 +145,6 @@ func authHelper(c gin.Context, minRole int) {
 	c.Set("username", username)
 	c.Set("role", userRole)
 	c.Set("id", loginId)
-	c.Set("group", fresh.Group)
-	c.Set("user_group", fresh.Group)
 	c.Set("use_access_token", useAccessToken)
 
 	c.Next()
@@ -301,20 +298,6 @@ func TokenAuth() gin.HandlerFunc {
 
 		userCache.WriteContext(c)
 
-		userGroup := userCache.Group
-		if tokenGroup := token.Group; tokenGroup != "" {
-			if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {
-				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("no access to group %s", tokenGroup))
-				return
-			}
-			if !service.ContainsGroupRatio(tokenGroup) && tokenGroup != "auto" {
-				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("group %s is deprecated", tokenGroup))
-				return
-			}
-			userGroup = tokenGroup
-		}
-		common.SetContextKey(c, constant.ContextKeyUsingGroup, userGroup)
-
 		if err := SetupContextForToken(c, token, parts...); err != nil {
 			return
 		}
@@ -350,7 +333,6 @@ func SetupContextForToken(c gin.Context, token *model.Token, parts ...string) er
 	} else {
 		c.Set("token_model_limit_enabled", false)
 	}
-	common.SetContextKey(c, constant.ContextKeyTokenGroup, token.Group)
 	common.SetContextKey(c, constant.ContextKeyTokenCrossGroupRetry, token.CrossGroupRetry)
 	if len(parts) > 1 {
 		if !model.IsAdmin(token.UserId) {

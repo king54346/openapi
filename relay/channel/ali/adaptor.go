@@ -12,7 +12,6 @@ import (
 	"openapi/relay/channel/openai"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/constant"
-	"openapi/setting"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -23,7 +22,7 @@ type Adaptor struct {
 }
 
 func isSyncImageModel(modelName string) bool {
-	return setting.IsSyncImageModel(modelName)
+	return IsSyncImageModel(modelName)
 }
 
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {

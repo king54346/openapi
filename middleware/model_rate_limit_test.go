@@ -65,14 +65,3 @@ func TestModelRateLimitCheckAndRecord(t *testing.T) {
 		t.Fatalf("expected positive window, got %v", window)
 	}
 }
-
-func TestGroupRateLimitRoundTrip(t *testing.T) {
-	setting.SetGroupRateLimit("test-group", 10, 5)
-	total, success, found := setting.GetGroupRateLimit("test-group")
-	if !found || total != 10 || success != 5 {
-		t.Fatalf("unexpected group limit: %d %d %v", total, success, found)
-	}
-	if _, _, found := setting.GetGroupRateLimit("no-such-group"); found {
-		t.Fatal("unknown group should not be found")
-	}
-}

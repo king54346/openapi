@@ -1,9 +1,12 @@
-// Package setting 保存转发相关的运行时配置，默认值可在启动时直接修改。
 package setting
 
 import (
+	"fmt"
+	"openapi/common"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 )
 
 // ChatCompletionsToResponsesPolicy 控制是否把 /v1/chat/completions 请求转成 Responses API 发给上游
@@ -53,62 +56,195 @@ type GlobalSettings struct {
 	ModelRequestRateLimitDurationMinutes int  `json:"model_request_rate_limit_duration_minutes"`
 	ModelRequestRateLimitCount           int  `json:"model_request_rate_limit_count"`
 	ModelRequestRateLimitSuccessCount    int  `json:"model_request_rate_limit_success_count"`
+
+	// ---------- 以下字段由 options 表同步（见 ApplyOptions） ----------
+
+	// 公开内容：公告、关于页、首页、用户协议、隐私政策
+	Notice          string `json:"notice"`
+	About           string `json:"about"`
+	HomePageContent string `json:"home_page_content"`
+	UserAgreement   string `json:"user_agreement"`
+	PrivacyPolicy   string `json:"privacy_policy"`
+	DocsLink        string `json:"docs_link"`
+
+	// TurnstileCheckEnabled 开启后人机验证相关接口需要携带 Cloudflare Turnstile 令牌
+	TurnstileCheckEnabled bool   `json:"turnstile_check_enabled"`
+	TurnstileSiteKey      string `json:"turnstile_site_key"`
+	TurnstileSecretKey    string `json:"-"` // 只用于服务端校验，永不输出
+
+	// 渠道亲和性：同一会话优先命中同一渠道
+	ChannelAffinityEnabled    bool `json:"channel_affinity_enabled"`
+	ChannelAffinityTTLSeconds int  `json:"channel_affinity_ttl_seconds"`
+	ChannelAffinityMaxEntries int  `json:"channel_affinity_max_entries"`
+
+	// Uptime Kuma 状态页代理
+	UptimeKumaStatusEnabled bool   `json:"uptime_kuma_status_enabled"`
+	UptimeKumaUrl           string `json:"uptime_kuma_url"`
+	UptimeKumaSlug          string `json:"uptime_kuma_slug"`
 }
 
-// GroupRateLimit 分组限流覆盖（total/success 为 0 表示不限制该项）。
-type GroupRateLimit struct {
-	TotalCount   int `json:"total_count"`
-	SuccessCount int `json:"success_count"`
-}
+var (
+	settingsMu     sync.RWMutex
+	globalSettings = GlobalSettings{
+		ThinkingModelBlacklist: []string{
+			"moonshotai/kimi-k2-thinking",
+			"kimi-k2-thinking",
+		},
+		ChatCompletionsToResponsesPolicy: ChatCompletionsToResponsesPolicy{
+			Enabled:     false,
+			AllChannels: true,
+		},
+		PingIntervalEnabled: false,
+		PingIntervalSeconds: 60,
+		ServerAddress:       "http://localhost:3000",
+		QwenSyncImageModels: []string{
+			"z-image",
+			"qwen-image",
+			"wan2.6",
+			"wan2.7",
+			"qwen-image-edit",
+			"qwen-image-edit-max",
+			"qwen-image-edit-max-2026-01-16",
+			"qwen-image-edit-plus",
+			"qwen-image-edit-plus-2025-12-15",
+			"qwen-image-edit-plus-2025-10-30",
+		},
+		ChannelAffinityTTLSeconds: 300,
+		ChannelAffinityMaxEntries: 100000,
+	}
+)
 
-var globalSettings = GlobalSettings{
-	ThinkingModelBlacklist: []string{
-		"moonshotai/kimi-k2-thinking",
-		"kimi-k2-thinking",
-	},
-	ChatCompletionsToResponsesPolicy: ChatCompletionsToResponsesPolicy{
-		Enabled:     false,
-		AllChannels: true,
-	},
-	PingIntervalEnabled: false,
-	PingIntervalSeconds: 60,
-	ServerAddress:       "http://localhost:3000",
-	QwenSyncImageModels: []string{
-		"z-image",
-		"qwen-image",
-		"wan2.6",
-		"wan2.7",
-		"qwen-image-edit",
-		"qwen-image-edit-max",
-		"qwen-image-edit-max-2026-01-16",
-		"qwen-image-edit-plus",
-		"qwen-image-edit-plus-2025-12-15",
-		"qwen-image-edit-plus-2025-10-30",
-	},
-}
-
+// GetGlobalSettings 返回运行时配置指针，只读；写入统一走 UpdateGlobalSettings / ApplyOptions。
 func GetGlobalSettings() *GlobalSettings {
 	return &globalSettings
 }
 
-// groupRateLimits 分组限流覆盖表（group -> GroupRateLimit），待接入真实配置中心后持久化。
-var groupRateLimits = map[string]GroupRateLimit{}
-
-// GetGroupRateLimit 获取分组限流覆盖，found 为 false 表示该分组无覆盖。
-func GetGroupRateLimit(group string) (totalCount int, successCount int, found bool) {
-	limit, ok := groupRateLimits[group]
-	if !ok {
-		return 0, 0, false
-	}
-	return limit.TotalCount, limit.SuccessCount, true
-}
-
-// SetGroupRateLimit 设置分组限流覆盖。
-func SetGroupRateLimit(group string, totalCount int, successCount int) {
-	if group == "" {
+// UpdateGlobalSettings 在写锁内修改运行时配置，避免与 ApplyOptions 并发写冲突。
+func UpdateGlobalSettings(fn func(settings *GlobalSettings)) {
+	if fn == nil {
 		return
 	}
-	groupRateLimits[group] = GroupRateLimit{TotalCount: totalCount, SuccessCount: successCount}
+	settingsMu.Lock()
+	defer settingsMu.Unlock()
+	fn(&globalSettings)
+}
+
+// GlobalSettingsSnapshot 返回运行时配置的副本，适合需要多次读取同一份快照的场景。
+func GlobalSettingsSnapshot() GlobalSettings {
+	settingsMu.RLock()
+	defer settingsMu.RUnlock()
+	return globalSettings
+}
+
+// ApplyOptions 把 options 表的键值同步到运行时配置。
+// 单个配置项解析失败只跳过该项并返回错误，其余项照常生效。
+func ApplyOptions(values map[string]string) []error {
+	var errs []error
+	set := func(key string, apply func(value string) error) {
+		value, ok := values[key]
+		if !ok {
+			return
+		}
+		if err := apply(value); err != nil {
+			errs = append(errs, fmt.Errorf("option %s: %w", key, err))
+		}
+	}
+
+	settingsMu.Lock()
+	defer settingsMu.Unlock()
+
+	set("Notice", func(v string) error { globalSettings.Notice = v; return nil })
+	set("About", func(v string) error { globalSettings.About = v; return nil })
+	set("HomePageContent", func(v string) error { globalSettings.HomePageContent = v; return nil })
+	set("UserAgreement", func(v string) error { globalSettings.UserAgreement = v; return nil })
+	set("PrivacyPolicy", func(v string) error { globalSettings.PrivacyPolicy = v; return nil })
+	set("general_setting.docs_link", func(v string) error { globalSettings.DocsLink = v; return nil })
+	set("ServerAddress", func(v string) error {
+		if v = strings.TrimSpace(v); v != "" {
+			globalSettings.ServerAddress = v
+		}
+		return nil
+	})
+	set("TurnstileCheckEnabled", func(v string) error {
+		return applyBool(v, &globalSettings.TurnstileCheckEnabled)
+	})
+	set("TurnstileSiteKey", func(v string) error { globalSettings.TurnstileSiteKey = v; return nil })
+	set("TurnstileSecretKey", func(v string) error { globalSettings.TurnstileSecretKey = v; return nil })
+	set("PingIntervalEnabled", func(v string) error {
+		return applyBool(v, &globalSettings.PingIntervalEnabled)
+	})
+	set("PingIntervalSeconds", func(v string) error {
+		return applyInt(v, &globalSettings.PingIntervalSeconds)
+	})
+	set("ThinkingModelBlacklist", func(v string) error {
+		return applyStringSlice(v, &globalSettings.ThinkingModelBlacklist)
+	})
+	set("ChannelAffinityEnabled", func(v string) error {
+		return applyBool(v, &globalSettings.ChannelAffinityEnabled)
+	})
+	set("ChannelAffinityTTLSeconds", func(v string) error {
+		return applyInt(v, &globalSettings.ChannelAffinityTTLSeconds)
+	})
+	set("ChannelAffinityMaxEntries", func(v string) error {
+		return applyInt(v, &globalSettings.ChannelAffinityMaxEntries)
+	})
+	set("UptimeKumaStatusEnabled", func(v string) error {
+		return applyBool(v, &globalSettings.UptimeKumaStatusEnabled)
+	})
+	set("UptimeKumaUrl", func(v string) error { globalSettings.UptimeKumaUrl = v; return nil })
+	set("UptimeKumaSlug", func(v string) error { globalSettings.UptimeKumaSlug = v; return nil })
+	set("ModelRequestRateLimitEnabled", func(v string) error {
+		return applyBool(v, &globalSettings.ModelRequestRateLimitEnabled)
+	})
+	set("ModelRequestRateLimitDurationMinutes", func(v string) error {
+		return applyInt(v, &globalSettings.ModelRequestRateLimitDurationMinutes)
+	})
+	set("ModelRequestRateLimitCount", func(v string) error {
+		return applyInt(v, &globalSettings.ModelRequestRateLimitCount)
+	})
+	set("ModelRequestRateLimitSuccessCount", func(v string) error {
+		return applyInt(v, &globalSettings.ModelRequestRateLimitSuccessCount)
+	})
+	set("QwenSyncImageModels", func(v string) error {
+		return applyStringSlice(v, &globalSettings.QwenSyncImageModels)
+	})
+	set("PassThroughRequestEnabled", func(v string) error {
+		return applyBool(v, &globalSettings.PassThroughRequestEnabled)
+	})
+
+	return errs
+}
+
+func applyBool(value string, target *bool) error {
+	parsed, err := strconv.ParseBool(strings.TrimSpace(value))
+	if err != nil {
+		return fmt.Errorf("expect bool: %w", err)
+	}
+	*target = parsed
+	return nil
+}
+
+func applyInt(value string, target *int) error {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fmt.Errorf("expect int: %w", err)
+	}
+	*target = parsed
+	return nil
+}
+
+// applyStringSlice 解析 JSON 字符串数组；空值表示清空配置。
+func applyStringSlice(value string, target *[]string) error {
+	if strings.TrimSpace(value) == "" {
+		*target = nil
+		return nil
+	}
+	var parsed []string
+	if err := common.Unmarshal([]byte(value), &parsed); err != nil {
+		return fmt.Errorf("expect string array: %w", err)
+	}
+	*target = parsed
+	return nil
 }
 
 // ShouldPreserveThinkingSuffix 判断模型是否配置为保留 thinking/-nothinking/-low/-high/-medium 后缀
@@ -117,6 +253,8 @@ func ShouldPreserveThinkingSuffix(modelName string) bool {
 	if target == "" {
 		return false
 	}
+	settingsMu.RLock()
+	defer settingsMu.RUnlock()
 	for _, entry := range globalSettings.ThinkingModelBlacklist {
 		if strings.TrimSpace(entry) == target {
 			return true
@@ -127,6 +265,8 @@ func ShouldPreserveThinkingSuffix(modelName string) bool {
 
 // IsSyncImageModel 判断阿里图片模型是否走同步接口
 func IsSyncImageModel(model string) bool {
+	settingsMu.RLock()
+	defer settingsMu.RUnlock()
 	for _, m := range globalSettings.QwenSyncImageModels {
 		if strings.Contains(model, m) {
 			return true

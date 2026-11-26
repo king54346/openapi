@@ -10,7 +10,7 @@ import (
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service"
+	relayerr "openapi/service/relayerr"
 	"openapi/setting"
 	"openapi/types"
 
@@ -83,9 +83,9 @@ func RerankHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.S
 	if resp != nil {
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
-			apiError = service.RelayErrorHandler(c.Request().Context(), httpResp, false)
+			apiError = relayerr.RelayErrorHandler(c.Request().Context(), httpResp, false)
 			// reset status code 重置状态码
-			service.ResetStatusCode(apiError, statusCodeMappingStr)
+			relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 			return apiError
 		}
 	}
@@ -93,7 +93,7 @@ func RerankHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.S
 	usage, apiError := adaptor.DoResponse(c, httpResp, info)
 	if apiError != nil {
 		// reset status code 重置状态码
-		service.ResetStatusCode(apiError, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiError, statusCodeMappingStr)
 		return apiError
 	}
 	recordUsage(c, info, usage.(*dto.Usage), nil)

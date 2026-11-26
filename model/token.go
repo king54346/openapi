@@ -65,7 +65,7 @@ func (t *Token) Insert() error {
 // tokenUpdatableColumns 允许用户修改的令牌字段（key、user_id、额度用量等不可改）
 var tokenUpdatableColumns = []string{
 	"name", "status", "expired_time", "remain_quota", "unlimited_quota",
-	"model_limits_enabled", "model_limits", "model_limits_type", "allow_ips", "group", "cross_group_retry",
+	"model_limits_enabled", "model_limits", "model_limits_type", "allow_ips", "cross_group_retry",
 }
 
 // Update 保存可修改字段（零值也会写入）。

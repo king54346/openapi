@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"openapi/common"
-	"openapi/database"
 	"openapi/constant"
+	"openapi/database"
 	"openapi/model"
 
 	gin "github.com/king54346/gin-tiny"
@@ -27,7 +27,7 @@ import (
 
 // mockUpstream 模拟上游服务商，按路径前缀区分渠道：
 //   - /fail：所有请求返回 503
-//   - /ok：OpenAI 兼容的对话（支持流式）与模型列表
+//   - /ok：tokens.OpenAI 兼容的对话（支持流式）与模型列表
 //   - /sora：视频任务提交与查询
 type mockUpstream struct {
 	*httptest.Server

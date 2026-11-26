@@ -9,6 +9,7 @@ import (
 	"openapi/constant"
 	"openapi/relay/channel"
 	"openapi/relay/channel/ali"
+	"openapi/relay/channel/claude"
 	"openapi/relay/channel/deepseek"
 	"openapi/relay/channel/minimax"
 	"openapi/relay/channel/moonshot"
@@ -28,7 +29,7 @@ import (
 func GetAdaptor(apiType int) channel.Adaptor {
 	switch apiType {
 	case constant.APITypeOpenAI, constant.APITypeOpenRouter:
-		// OpenRouter 与 OpenAI 协议兼容，差异在 openai.Adaptor 内部按渠道类型处理
+		// OpenRouter 与 tokens.OpenAI 协议兼容，差异在 openai.Adaptor 内部按渠道类型处理
 		return &openai.Adaptor{}
 	case constant.APITypeAli:
 		return &ali.Adaptor{}
@@ -40,6 +41,8 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &moonshot.Adaptor{}
 	case constant.APITypeVolcEngine:
 		return &volcengine.Adaptor{}
+	case constant.APITypeAnthropic:
+		return &claude.Adaptor{}
 	}
 	return nil
 }

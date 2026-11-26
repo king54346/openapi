@@ -8,7 +8,7 @@ import (
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
 	"openapi/relay/helper"
-	"openapi/service"
+	"openapi/service/tokens"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -132,7 +132,7 @@ func handleLastResponse(lastStreamData string, responseId *string, createAt *int
 	*systemFingerprint = lastStreamResponse.GetSystemFingerprint()
 	*model = lastStreamResponse.Model
 
-	if service.ValidUsage(lastStreamResponse.Usage) {
+	if tokens.ValidUsage(lastStreamResponse.Usage) {
 		*containStreamUsage = true
 		*usage = lastStreamResponse.Usage
 		if !info.ShouldIncludeUsage {

@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"openapi/common"
-	"openapi/constant"
 	"openapi/dto"
 	"openapi/logger"
 	"openapi/relay/channel"
@@ -77,8 +76,8 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 func (a *Adaptor) SetupRequestHeader(c gin.Context, header *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, header)
-	if info.ChannelType == constant.ChannelTypeOpenAI && "" != info.Organization {
-		header.Set("OpenAI-Organization", info.Organization)
+	if info.ChannelType == ChannelTypeOpenAI && "" != info.Organization {
+		header.Set("tokens.OpenAI-Organization", info.Organization)
 	}
 	// 检查 Header Override 是否已设置 Authorization，如果已设置则跳过默认设置
 	// 这样可以避免在 Header Override 应用时被覆盖（虽然 Header Override 会在之后应用，但这里作为额外保护）
@@ -114,7 +113,7 @@ func (a *Adaptor) SetupRequestHeader(c gin.Context, header *http.Header, info *r
 			header.Set("Authorization", "Bearer "+info.ApiKey)
 		}
 	}
-	if info.ChannelType == constant.ChannelTypeOpenRouter {
+	if info.ChannelType == ChannelTypeOpenRouter {
 		header.Set("HTTP-Referer", "")
 		header.Set("X-Title", "OpenAPI")
 	}
@@ -125,10 +124,10 @@ func (a *Adaptor) ConvertOpenAIRequest(c gin.Context, info *relaycommon.RelayInf
 	if request == nil {
 		return nil, errors.New("request is nil")
 	}
-	if info.ChannelType != constant.ChannelTypeOpenAI {
+	if info.ChannelType != ChannelTypeOpenAI {
 		request.StreamOptions = nil
 	}
-	if info.ChannelType == constant.ChannelTypeOpenRouter {
+	if info.ChannelType == ChannelTypeOpenRouter {
 		if len(request.Usage) == 0 {
 			request.Usage = json.RawMessage(`{"include":true}`)
 		}
@@ -154,7 +153,7 @@ func (a *Adaptor) ConvertOpenAIRequest(c gin.Context, info *relaycommon.RelayInf
 			request.ReasoningEffort = ""
 		} else {
 			if len(request.Reasoning) == 0 {
-				// 适配 OpenAI 的 ReasoningEffort 格式
+				// 适配 tokens.OpenAI 的 ReasoningEffort 格式
 				if request.ReasoningEffort != "" {
 					reasoning := map[string]any{
 						"enabled": true,
@@ -530,7 +529,7 @@ func (a *Adaptor) DoResponse(c gin.Context, resp *http.Response, info *relaycomm
 
 func (a *Adaptor) GetModelList() []string {
 	switch a.ChannelType {
-	case constant.ChannelTypeOpenRouter:
+	case ChannelTypeOpenRouter:
 		return openrouter.ModelList
 	default:
 		return ModelList
@@ -539,7 +538,7 @@ func (a *Adaptor) GetModelList() []string {
 
 func (a *Adaptor) GetChannelName() string {
 	switch a.ChannelType {
-	case constant.ChannelTypeOpenRouter:
+	case ChannelTypeOpenRouter:
 		return openrouter.ChannelName
 	default:
 		return ChannelName

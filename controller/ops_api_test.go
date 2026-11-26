@@ -42,7 +42,7 @@ func insertTestChannel(t *testing.T, name, baseURL, models string, status int) *
 	t.Helper()
 	autoBan := 1
 	ch := &model.Channel{Type: constant.ChannelTypeOpenAI, Key: "k-" + name, Name: name, Status: status,
-		Group: "default", Models: models, BaseURL: &baseURL, AutoBan: &autoBan}
+		Models: models, BaseURL: &baseURL, AutoBan: &autoBan}
 	if err := ch.Insert(); err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestModelMetaAPI(t *testing.T) {
 		"model_name": "gpt-", "name_rule": model.NameRulePrefix, "tags": "对话"}))
 
 	got := decode[model.Model](t, s.ok(admin, http.MethodGet, fmt.Sprintf("/api/models/%d", exact.Id), nil))
-	if len(got.BoundChannels) != 1 || got.BoundChannels[0].Name != "ch" || len(got.EnableGroups) != 1 || got.EnableGroups[0] != "default" {
+	if len(got.BoundChannels) != 1 || got.BoundChannels[0].Name != "ch" {
 		t.Fatalf("exact model enrichment: %+v", got)
 	}
 	got = decode[model.Model](t, s.ok(admin, http.MethodGet, fmt.Sprintf("/api/models/%d", prefix.Id), nil))

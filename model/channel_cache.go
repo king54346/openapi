@@ -14,10 +14,11 @@ import (
 )
 
 // channelCache 已启用且有转发实现的渠道快照，定期从 channels 表整体重建。
+// 分组概念已移除：按模型索引，所有渠道对所有请求可见。
 type channelCache struct {
 	byID map[int]*Channel
-	// group -> model -> 渠道列表（按优先级降序）
-	byGroupModel map[string]map[string][]*Channel
+	// model -> 渠道列表（按优先级降序）
+	byModel map[string][]*Channel
 }
 
 var (
@@ -35,8 +36,8 @@ func InitChannelCache() error {
 	}
 
 	cache := &channelCache{
-		byID:         make(map[int]*Channel, len(channels)),
-		byGroupModel: make(map[string]map[string][]*Channel),
+		byID:    make(map[int]*Channel, len(channels)),
+		byModel: make(map[string][]*Channel),
 	}
 	var skipped []string
 	for _, ch := range channels {
@@ -45,28 +46,16 @@ func InitChannelCache() error {
 			continue
 		}
 		cache.byID[ch.Id] = ch
-		for _, group := range ch.GetGroups() {
-			if group == "" {
-				continue
-			}
-			models := cache.byGroupModel[group]
-			if models == nil {
-				models = make(map[string][]*Channel)
-				cache.byGroupModel[group] = models
-			}
-			for _, m := range ch.GetModels() {
-				if m = strings.TrimSpace(m); m != "" {
-					models[m] = append(models[m], ch)
-				}
+		for _, modelName := range ch.GetModels() {
+			if modelName = strings.TrimSpace(modelName); modelName != "" {
+				cache.byModel[modelName] = append(cache.byModel[modelName], ch)
 			}
 		}
 	}
-	for _, models := range cache.byGroupModel {
-		for _, list := range models {
-			sort.SliceStable(list, func(i, j int) bool {
-				return list[i].GetPriority() > list[j].GetPriority()
-			})
-		}
+	for _, list := range cache.byModel {
+		sort.SliceStable(list, func(i, j int) bool {
+			return list[i].GetPriority() > list[j].GetPriority()
+		})
 	}
 
 	channelCacheMu.Lock()
@@ -109,13 +98,13 @@ func CacheGetChannel(channelID int) (*Channel, error) {
 	return GetChannelById(channelID, true)
 }
 
-// IsChannelEnabledForGroupModel 渠道是否在该分组下启用并支持该模型。
+// IsChannelEnabledForGroupModel 渠道是否启用并支持该模型（分组参数仅为兼容调用方保留，已忽略）。
 func IsChannelEnabledForGroupModel(group, modelName string, channelID int) bool {
 	cache := getChannelCache()
 	if cache == nil {
 		return false
 	}
-	for _, ch := range cache.byGroupModel[group][modelName] {
+	for _, ch := range cache.byModel[modelName] {
 		if ch.Id == channelID {
 			return true
 		}
@@ -123,15 +112,16 @@ func IsChannelEnabledForGroupModel(group, modelName string, channelID int) bool 
 	return false
 }
 
-// GetRandomSatisfiedChannel 选出分组下支持该模型的渠道：
+// GetRandomSatisfiedChannel 选出支持该模型的渠道：
 // 先按优先级分档（retry 次数越大，档位越低，超出后停在最低档），档内按权重随机。
 // 没有可用渠道时返回 (nil, nil)。
 func GetRandomSatisfiedChannel(group, modelName string, retry int) (*Channel, error) {
+	_ = group // 分组已移除
 	cache := getChannelCache()
 	if cache == nil {
 		return nil, errChannelCacheNotReady
 	}
-	candidates := cache.byGroupModel[group][modelName]
+	candidates := cache.byModel[modelName]
 	if len(candidates) == 0 {
 		return nil, nil
 	}
@@ -165,20 +155,6 @@ func GetRandomSatisfiedChannel(group, modelName string, retry int) (*Channel, er
 	return tier[len(tier)-1], nil
 }
 
-// GetGroupModels 返回分组下有可用渠道的模型名（已排序）。
-func GetGroupModels(group string) []string {
-	cache := getChannelCache()
-	if cache == nil {
-		return nil
-	}
-	models := make([]string, 0, len(cache.byGroupModel[group]))
-	for m := range cache.byGroupModel[group] {
-		models = append(models, m)
-	}
-	sort.Strings(models)
-	return models
-}
-
 // RefreshChannelCache 渠道被修改后立即重建缓存，失败只记日志（下个同步周期会再试）。
 func RefreshChannelCache() {
 	if err := InitChannelCache(); err != nil {
@@ -186,22 +162,28 @@ func RefreshChannelCache() {
 	}
 }
 
-// GetEnabledModels 返回所有已启用渠道（任意分组）提供的模型名（去重、已排序）。
+// GetEnabledModels 返回所有已启用渠道提供的模型名（去重、已排序）。
 func GetEnabledModels() []string {
 	cache := getChannelCache()
 	if cache == nil {
 		return nil
 	}
-	seen := make(map[string]struct{})
-	for _, models := range cache.byGroupModel {
-		for m := range models {
-			seen[m] = struct{}{}
-		}
-	}
-	names := make([]string, 0, len(seen))
-	for m := range seen {
-		names = append(names, m)
+	names := make([]string, 0, len(cache.byModel))
+	for modelName := range cache.byModel {
+		names = append(names, modelName)
 	}
 	sort.Strings(names)
 	return names
+}
+
+// GetModelChannels 返回支持该模型的渠道（按优先级降序的副本）。
+func GetModelChannels(modelName string) []*Channel {
+	cache := getChannelCache()
+	if cache == nil {
+		return nil
+	}
+	list := cache.byModel[modelName]
+	out := make([]*Channel, len(list))
+	copy(out, list)
+	return out
 }

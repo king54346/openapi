@@ -14,7 +14,8 @@ import (
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
 	"openapi/relay/helper"
-	"openapi/service"
+	"openapi/service/compat"
+	relayerr "openapi/service/relayerr"
 	"openapi/setting"
 	"openapi/types"
 
@@ -74,7 +75,7 @@ func TextHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.Sta
 	if info.RelayMode == relayconstant.RelayModeChatCompletions &&
 		!passThroughGlobal &&
 		!info.ChannelSetting.PassThroughBodyEnabled &&
-		service.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName) {
+		compat.ShouldChatCompletionsUseResponsesGlobal(info.ChannelId, info.ChannelType, info.OriginModelName) {
 		applySystemPromptIfNeeded(c, info, request)
 		usage, apiErr := chatCompletionsViaResponses(c, info, adaptor, request)
 		if apiErr != nil {
@@ -150,7 +151,7 @@ func TextHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.Sta
 			return types.NewError(err, types.ErrorCodeJsonMarshalFailed, types.ErrOptionWithSkipRetry())
 		}
 
-		// remove disabled fields for OpenAI API
+		// remove disabled fields for tokens.OpenAI API
 		jsonData, err = relaycommon.RemoveDisabledFields(jsonData, info.ChannelOtherSettings)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -181,9 +182,9 @@ func TextHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.Sta
 		httpResp = resp.(*http.Response)
 		info.IsStream = info.IsStream || strings.HasPrefix(httpResp.Header.Get("Content-Type"), "text/event-stream")
 		if httpResp.StatusCode != http.StatusOK {
-			apiErr := service.RelayErrorHandler(c.Request().Context(), httpResp, false)
+			apiErr := relayerr.RelayErrorHandler(c.Request().Context(), httpResp, false)
 			// reset status code 重置状态码
-			service.ResetStatusCode(apiErr, statusCodeMappingStr)
+			relayerr.ResetStatusCode(apiErr, statusCodeMappingStr)
 			return apiErr
 		}
 	}
@@ -191,7 +192,7 @@ func TextHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.Sta
 	usage, apiErr := adaptor.DoResponse(c, httpResp, info)
 	if apiErr != nil {
 		// reset status code 重置状态码
-		service.ResetStatusCode(apiErr, statusCodeMappingStr)
+		relayerr.ResetStatusCode(apiErr, statusCodeMappingStr)
 		return apiErr
 	}
 

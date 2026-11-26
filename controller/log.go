@@ -21,7 +21,6 @@ type logQuery struct {
 	tokenName      string
 	modelName      string
 	channel        int
-	group          string
 	requestId      string
 }
 
@@ -30,7 +29,6 @@ func parseLogQuery(c gin.Context) logQuery {
 		username:  c.Query("username"),
 		tokenName: c.Query("token_name"),
 		modelName: c.Query("model_name"),
-		group:     c.Query("group"),
 		requestId: c.Query("request_id"),
 	}
 	q.logType, _ = strconv.Atoi(c.Query("type"))
@@ -44,8 +42,8 @@ func parseLogQuery(c gin.Context) logQuery {
 func GetAllLogs(c gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	q := parseLogQuery(c)
-	logs, total, err := model.GetAllLogs(q.logType, q.startTimestamp, q.endTimestamp, q.modelName, q.username, q.tokenName,
-		pageInfo.GetStartIdx(), pageInfo.GetPageSize(), q.channel, q.group, q.requestId)
+	logs, total, err := GetAllLogs(q.logType, q.startTimestamp, q.endTimestamp, q.modelName, q.username, q.tokenName,
+		pageInfo.GetStartIdx(), pageInfo.GetPageSize(), q.channel, q.requestId)
 	if err != nil {
 		apiError(c, err)
 		return
@@ -57,8 +55,8 @@ func GetAllLogs(c gin.Context) {
 func GetUserLogs(c gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	q := parseLogQuery(c)
-	logs, total, err := model.GetUserLogs(c.GetInt("id"), q.logType, q.startTimestamp, q.endTimestamp, q.modelName, q.tokenName,
-		pageInfo.GetStartIdx(), pageInfo.GetPageSize(), q.group, q.requestId)
+	logs, total, err := GetUserLogs(c.GetInt("id"), q.logType, q.startTimestamp, q.endTimestamp, q.modelName, q.tokenName,
+		pageInfo.GetStartIdx(), pageInfo.GetPageSize(), q.requestId)
 	if err != nil {
 		apiError(c, err)
 		return
@@ -69,7 +67,7 @@ func GetUserLogs(c gin.Context) {
 // SearchAllLogs 管理员按关键字分页搜索日志。
 func SearchAllLogs(c gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	logs, total, err := model.SearchAllLogs(c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	logs, total, err := SearchAllLogs(c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
@@ -80,7 +78,7 @@ func SearchAllLogs(c gin.Context) {
 // SearchUserLogs 用户按关键字分页搜索自己的日志。
 func SearchUserLogs(c gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	logs, total, err := model.SearchUserLogs(c.GetInt("id"), c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	logs, total, err := SearchUserLogs(c.GetInt("id"), c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		apiError(c, err)
 		return
@@ -91,7 +89,7 @@ func SearchUserLogs(c gin.Context) {
 // GetLogByKey 凭令牌 key 分页查询该令牌的日志（无需登录，供令牌持有者自查），可按 request_id 过滤。
 func GetLogByKey(c gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-	logs, total, err := model.GetLogByKey(c.Query("key"), c.Query("request_id"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	logs, total, err := GetLogByKey(c.Query("key"), c.Query("request_id"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
 	if err != nil {
 		if errors.Is(err, model.ErrTokenEmpty) || errors.Is(err, model.ErrTokenInvalid) {
 			apiErrorMsg(c, err.Error())
@@ -106,14 +104,14 @@ func GetLogByKey(c gin.Context) {
 // GetLogsStat 管理员查询用量统计（额度、RPM、TPM）。
 func GetLogsStat(c gin.Context) {
 	q := parseLogQuery(c)
-	stat := model.SumUsedQuota(q.logType, q.startTimestamp, q.endTimestamp, q.modelName, q.username, q.tokenName, q.channel, q.group)
+	stat := model.SumUsedQuota(q.logType, q.startTimestamp, q.endTimestamp, q.modelName, q.username, q.tokenName, q.channel)
 	apiSuccess(c, gin.H{"quota": stat.Quota, "rpm": stat.Rpm, "tpm": stat.Tpm})
 }
 
 // GetLogsSelfStat 用户查询自己的用量统计（按当前用户名过滤）。
 func GetLogsSelfStat(c gin.Context) {
 	q := parseLogQuery(c)
-	stat := model.SumUsedQuota(q.logType, q.startTimestamp, q.endTimestamp, q.modelName, c.GetString("username"), q.tokenName, q.channel, q.group)
+	stat := model.SumUsedQuota(q.logType, q.startTimestamp, q.endTimestamp, q.modelName, c.GetString("username"), q.tokenName, q.channel)
 	apiSuccess(c, gin.H{"quota": stat.Quota, "rpm": stat.Rpm, "tpm": stat.Tpm})
 }
 

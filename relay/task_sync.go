@@ -12,7 +12,6 @@ import (
 	"openapi/dto"
 	"openapi/model"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
 
 	gin "github.com/king54346/gin-tiny"
 	"gorm.io/gorm"
@@ -74,7 +73,7 @@ func SyncTaskFromUpstream(task *model.Task) error {
 	if err != nil {
 		return fmt.Errorf("fetch task: %w", err)
 	}
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("read fetch response: %w", err)

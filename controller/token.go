@@ -9,7 +9,6 @@ import (
 
 	"openapi/common"
 	"openapi/model"
-	"openapi/service"
 
 	gin "github.com/king54346/gin-tiny"
 )
@@ -79,7 +78,7 @@ type tokenRequest struct {
 }
 
 // validate 校验通用字段；userGroup 为当前用户所在分组。
-func (r *tokenRequest) validate(userGroup string) error {
+func (r *tokenRequest) validate() error {
 	r.Name = strings.TrimSpace(r.Name)
 	if utf8.RuneCountInString(r.Name) > maxTokenNameLength {
 		return fmt.Errorf("token name must be at most %d characters", maxTokenNameLength)
@@ -96,11 +95,6 @@ func (r *tokenRequest) validate(userGroup string) error {
 	if r.ModelLimitsType != 0 && r.ModelLimitsType != 1 {
 		return errors.New("model_limits_type must be 0 (whitelist) or 1 (blacklist)")
 	}
-	if r.Group != "" {
-		if _, ok := service.GetUserUsableGroups(userGroup)[r.Group]; !ok {
-			return fmt.Errorf("no access to group %s", r.Group)
-		}
-	}
 	return nil
 }
 
@@ -113,19 +107,7 @@ func (r *tokenRequest) applyTo(t *model.Token) {
 	t.ModelLimits = r.ModelLimits
 	t.ModelLimitsType = r.ModelLimitsType
 	t.IpLimits = r.AllowIps
-	t.Group = r.Group
 	t.CrossGroupRetry = r.CrossGroupRetry
-}
-
-// currentUserGroup 当前登录用户的分组（session 中取不到时回源数据库）。
-func currentUserGroup(c gin.Context) string {
-	if g := c.GetString("user_group"); g != "" {
-		return g
-	}
-	if u, err := model.GetUserCache(c.GetInt("id")); err == nil {
-		return u.Group
-	}
-	return ""
 }
 
 // AddToken 新建令牌，返回含完整 key 的令牌。
@@ -135,7 +117,7 @@ func AddToken(c gin.Context) {
 		apiErrorMsg(c, "invalid request: "+err.Error())
 		return
 	}
-	if err := req.validate(currentUserGroup(c)); err != nil {
+	if err := req.validate(); err != nil {
 		apiErrorMsg(c, err.Error())
 		return
 	}
@@ -184,7 +166,7 @@ func UpdateToken(c gin.Context) {
 		return
 	}
 
-	if err := req.validate(currentUserGroup(c)); err != nil {
+	if err := req.validate(); err != nil {
 		apiErrorMsg(c, err.Error())
 		return
 	}
@@ -234,4 +216,217 @@ func DeleteTokenBatch(c gin.Context) {
 		return
 	}
 	apiSuccess(c, rows)
+}
+
+// 令牌「访问限制」模板：按用户隔离，供创建/编辑令牌时快速套用访问限制。
+
+const maxTokenTemplateNameLength = 64
+
+// GetUserTokenAccessTemplates 分页列出当前用户的模板。
+func GetUserTokenAccessTemplates(c gin.Context) {
+	page := common.GetPageQuery(c)
+	templates, total, err := model.ListUserTokenAccessTemplates(c.GetInt("id"), page.GetStartIdx(), page.GetPageSize())
+	if err != nil {
+		apiError(c, err)
+		return
+	}
+	apiSuccess(c, pageResult(page, templates, total))
+}
+
+// tokenTemplateRequest 新建/修改模板的请求体。
+type tokenTemplateRequest struct {
+	Id              int    `json:"id"`
+	Name            string `json:"name"`
+	ModelLimitsType int    `json:"model_limits_type"`
+	ModelLimits     string `json:"model_limits"`
+	AllowIps        string `json:"allow_ips"`
+}
+
+// validate 校验并规整字段。
+func (r *tokenTemplateRequest) validate() error {
+	r.Name = strings.TrimSpace(r.Name)
+	if r.Name == "" {
+		return errors.New("name is required")
+	}
+	if len([]rune(r.Name)) > maxTokenTemplateNameLength {
+		return errors.New("name must be at most 64 characters")
+	}
+	if r.ModelLimitsType != 0 && r.ModelLimitsType != 1 {
+		return errors.New("model_limits_type must be 0 (whitelist) or 1 (blacklist)")
+	}
+	if len(r.ModelLimits) > 2048 {
+		return errors.New("model_limits is too long")
+	}
+	return nil
+}
+
+// AddTokenAccessTemplate 新建模板。
+func AddTokenAccessTemplate(c gin.Context) {
+	var req tokenTemplateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apiErrorMsg(c, "invalid request: "+err.Error())
+		return
+	}
+	if err := req.validate(); err != nil {
+		apiErrorMsg(c, err.Error())
+		return
+	}
+	template := &model.TokenAccessTemplate{
+		UserId:          c.GetInt("id"),
+		Name:            req.Name,
+		ModelLimitsType: req.ModelLimitsType,
+		ModelLimits:     req.ModelLimits,
+		AllowIps:        req.AllowIps,
+	}
+	if err := template.Insert(); err != nil {
+		apiError(c, err)
+		return
+	}
+	apiSuccess(c, template)
+}
+
+// UpdateTokenAccessTemplate 修改自己的模板。
+func UpdateTokenAccessTemplate(c gin.Context) {
+	var req tokenTemplateRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.Id <= 0 {
+		apiErrorMsg(c, "invalid request")
+		return
+	}
+	if err := req.validate(); err != nil {
+		apiErrorMsg(c, err.Error())
+		return
+	}
+	userID := c.GetInt("id")
+	template, err := model.GetTokenAccessTemplateById(req.Id, userID)
+	if err != nil {
+		tokenTemplateNotFoundOrError(c, err)
+		return
+	}
+	template.Name = req.Name
+	template.ModelLimitsType = req.ModelLimitsType
+	template.ModelLimits = req.ModelLimits
+	template.AllowIps = req.AllowIps
+	if err := template.Update(); err != nil {
+		apiError(c, err)
+		return
+	}
+	apiSuccess(c, template)
+}
+
+// DeleteTokenAccessTemplate 删除自己的模板（硬删除）。
+func DeleteTokenAccessTemplate(c gin.Context) {
+	id, ok := paramID(c)
+	if !ok {
+		return
+	}
+	userID := c.GetInt("id")
+	template, err := model.GetTokenAccessTemplateById(id, userID)
+	if err != nil {
+		tokenTemplateNotFoundOrError(c, err)
+		return
+	}
+	if err := template.Delete(); err != nil {
+		apiError(c, err)
+		return
+	}
+	apiOK(c)
+}
+
+// tokenTemplateNotFoundOrError 区分"不存在/越权"与内部错误。
+func tokenTemplateNotFoundOrError(c gin.Context, err error) {
+	if errors.Is(err, model.ErrTokenAccessTemplateNotFound) {
+		apiErrorMsg(c, "template not found")
+		return
+	}
+	apiError(c, err)
+}
+
+// 令牌使用情况与调用分析。本项目不做计费，因此不返回金额，只返回请求次数与 token 统计。
+
+// tokenAnalyticsDefaultDays 分析接口默认统计最近多少天
+const tokenAnalyticsDefaultDays = 30
+
+// GetTokenUsage GET /api/usage/token/：调用方用自己的 API Key 查询这个令牌的用量。
+func GetTokenUsage(c gin.Context) {
+	tokenID := c.GetInt("token_id")
+	userID := c.GetInt("id")
+	token, err := model.GetUserTokenById(tokenID, userID)
+	if err != nil {
+		tokenNotFoundOrError(c, err)
+		return
+	}
+
+	summary, err := model.GetTokenUsageSummary(token.Id)
+	if err != nil {
+		apiError(c, err)
+		return
+	}
+
+	apiSuccess(c, gin.H{
+		"object":            "token_usage",
+		"id":                token.Id,
+		"name":              token.Name,
+		"status":            token.Status,
+		"expired_time":      token.ExpiredTime,
+		"remain_quota":      token.RemainQuota,
+		"unlimited_quota":   token.UnlimitedQuota,
+		"used_quota":        token.UsedQuota,
+		"created_time":      token.CreatedTime,
+		"accessed_time":     token.AccessedTime,
+		"total_requests":    summary.TotalCalls,
+		"prompt_tokens":     summary.TotalPromptTokens,
+		"completion_tokens": summary.TotalCompletionTokens,
+		"total_tokens":      summary.TotalPromptTokens + summary.TotalCompletionTokens,
+	})
+}
+
+// GetTokenAnalytics GET /api/token/analytics/:id：令牌调用趋势与模型分布。
+// 时间范围用 start_time / end_time（秒级时间戳）指定，默认最近 30 天。
+func GetTokenAnalytics(c gin.Context) {
+	id, ok := paramID(c)
+	if !ok {
+		return
+	}
+	token, err := model.GetUserTokenById(id, c.GetInt("id"))
+	if err != nil {
+		tokenNotFoundOrError(c, err)
+		return
+	}
+
+	endTime := common.GetTimestamp()
+	if value := c.Query("end_time"); value != "" {
+		if parsed := common.String2Int(value); parsed > 0 {
+			endTime = int64(parsed)
+		}
+	}
+	startTime := endTime - int64(tokenAnalyticsDefaultDays)*24*3600
+	if value := c.Query("start_time"); value != "" {
+		if parsed := common.String2Int(value); parsed > 0 {
+			startTime = int64(parsed)
+		}
+	}
+	if days := common.String2Int(c.Query("days")); days > 0 {
+		startTime = endTime - int64(days)*24*3600
+	}
+	if startTime > endTime {
+		apiErrorMsg(c, "start_time must be earlier than end_time")
+		return
+	}
+
+	analytics, err := GetTokenAnalytics(token.Id, startTime, endTime)
+	if err != nil {
+		apiError(c, err)
+		return
+	}
+	apiSuccess(c, gin.H{
+		"token_id":    token.Id,
+		"token_name":  token.Name,
+		"start_time":  startTime,
+		"end_time":    endTime,
+		"model_stats": analytics.ModelStats,
+		"daily_stats": analytics.DailyStats,
+		"summary":     analytics.Summary,
+		// 便于前端直接展示时间窗口
+		"range_days": (endTime - startTime) / 86400,
+	})
 }

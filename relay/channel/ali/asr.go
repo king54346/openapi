@@ -12,7 +12,6 @@ import (
 	"openapi/common"
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -142,7 +141,7 @@ func convertAudioToAliChatASR(c gin.Context, info *relaycommon.RelayInfo, reques
 
 // aliChatASRResponseHandler 处理阿里 Chat ASR 的响应，提取文本并以标准 STT 格式返回
 func aliChatASRResponseHandler(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*types.StarAPIError, *dto.Usage) {
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -175,7 +174,7 @@ func aliChatASRResponseHandler(c gin.Context, resp *http.Response, info *relayco
 		return types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError), nil
 	}
 
-	service.IOCopyBytesGracefully(c, resp, sttBody)
+	httpclient.IOCopyBytesGracefully(c, resp, sttBody)
 
 	usage := chatResp.Usage
 	if usage == nil {

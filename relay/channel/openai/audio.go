@@ -13,7 +13,7 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service"
+	"openapi/service/tokens"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -26,8 +26,8 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 	// if the upstream returns a specific status code, once the upstream has already written the header,
 	// the subsequent failure of the response body should be regarded as a non-recoverable error,
 	// and can be terminated directly.
-	defer service.CloseResponseBodyGracefully(resp)
-	usage := service.NewUsage(info.GetEstimatePromptTokens(), 0)
+	defer httpclient.CloseResponseBodyGracefully(resp)
+	usage := tokens.NewUsage(info.GetEstimatePromptTokens(), 0)
 	for k, v := range resp.Header {
 		c.Response().Header().Set(k, v[0])
 	}
@@ -51,7 +51,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 			return true
 		})
 	} else {
-		service.MarkUsageEstimated(c)
+		tokens.MarkUsageEstimated(c)
 		// 读取响应体到缓冲区
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -77,7 +77,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 		var durationErr error
 
 		if audioFormat == "pcm" {
-			// PCM 格式没有文件头，根据 OpenAI TTS 的 PCM 参数计算时长
+			// PCM 格式没有文件头，根据 tokens.OpenAI TTS 的 PCM 参数计算时长
 			// 采样率: 24000 Hz, 位深度: 16-bit (2 bytes), 声道数: 1
 			const sampleRate = 24000
 			const bytesPerSample = 2
@@ -99,7 +99,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 			usage.CompletionTokens = estimatedTokens
 			usage.CompletionTokenDetails.AudioTokens = estimatedTokens
 		} else if duration > 0 {
-			completionTokens := service.AudioDurationToTokens(duration)
+			completionTokens := tokens.AudioDurationToTokens(duration)
 			usage.CompletionTokens = completionTokens
 			usage.CompletionTokenDetails.AudioTokens = completionTokens
 		}
@@ -110,14 +110,14 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 }
 
 func OpenaiSTTHandler(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo, responseFormat string) (*types.StarAPIError, *dto.Usage) {
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError), nil
 	}
 	// 写入新的 response body
-	service.IOCopyBytesGracefully(c, resp, responseBody)
+	httpclient.IOCopyBytesGracefully(c, resp, responseBody)
 
 	var responseData struct {
 		Usage *dto.Usage `json:"usage"`
@@ -135,5 +135,5 @@ func OpenaiSTTHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 		}
 	}
 
-	return nil, service.NewUsage(info.GetEstimatePromptTokens(), 0)
+	return nil, tokens.NewUsage(info.GetEstimatePromptTokens(), 0)
 }

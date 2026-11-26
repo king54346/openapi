@@ -65,7 +65,7 @@ func TestUpdateUnfinishedTasks(t *testing.T) {
 
 	baseURL := upstream.URL
 	ch := &model.Channel{Id: 1, Type: constant.ChannelTypeSora, Status: common.ChannelStatusEnabled,
-		Key: "k", Name: "sora", Group: "default", Models: "sora-2", BaseURL: &baseURL}
+		Key: "k", Name: "sora", Models: "sora-2", BaseURL: &baseURL}
 	if err := ch.Insert(); err != nil {
 		t.Fatal(err)
 	}

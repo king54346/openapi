@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"openapi/common"
 
@@ -62,16 +64,24 @@ func (mi *Model) Insert() error {
 	now := common.GetTimestamp()
 	mi.CreatedTime = now
 	mi.UpdatedTime = now
-	return DB.Create(mi).Error
+	if err := DB.Create(mi).Error; err != nil {
+		return err
+	}
+	InvalidateModelTagsCache()
+	return nil
 }
 
 // Update 保存全部可编辑字段（不改 created_time）
 func (mi *Model) Update() error {
 	mi.UpdatedTime = common.GetTimestamp()
-	return DB.Model(&Model{}).Where("id = ?", mi.Id).
+	if err := DB.Model(&Model{}).Where("id = ?", mi.Id).
 		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official",
 			"billing_type", "pixel_price", "video_size_price", "video_duration_price", "name_rule", "updated_time").
-		Updates(mi).Error
+		Updates(mi).Error; err != nil {
+		return err
+	}
+	InvalidateModelTagsCache()
+	return nil
 }
 
 // GetModelMetaById 按 id 取模型元数据
@@ -88,13 +98,21 @@ func GetModelMetaById(id int) (*Model, error) {
 
 // DeleteModelMetaById 软删除模型元数据
 func DeleteModelMetaById(id int) error {
-	return DB.Delete(&Model{}, "id = ?", id).Error
+	if err := DB.Delete(&Model{}, "id = ?", id).Error; err != nil {
+		return err
+	}
+	InvalidateModelTagsCache()
+	return nil
 }
 
 // UpdateModelMetaStatus 只修改状态
 func UpdateModelMetaStatus(id, status int) error {
-	return DB.Model(&Model{}).Where("id = ?", id).
-		Updates(map[string]any{"status": status, "updated_time": common.GetTimestamp()}).Error
+	if err := DB.Model(&Model{}).Where("id = ?", id).
+		Updates(map[string]any{"status": status, "updated_time": common.GetTimestamp()}).Error; err != nil {
+		return err
+	}
+	InvalidateModelTagsCache()
+	return nil
 }
 
 // IsModelNameDuplicated 除 id 外是否已有同名模型
@@ -202,6 +220,64 @@ func matchModelName(rule int, pattern, name string) bool {
 	return name == pattern
 }
 
+// modelTagsCache 模型名 -> 标签列表，带 TTL。
+// 标签用于判断用户分组能否调用某个模型（tag_access_groups），属于热路径，避免每次请求都查库。
+var modelTagsCache = struct {
+	mu      sync.RWMutex
+	entries map[string]modelTagsEntry
+}{entries: map[string]modelTagsEntry{}}
+
+type modelTagsEntry struct {
+	tags     []string
+	expireAt time.Time
+}
+
+// modelTagsCacheTTL 标签缓存有效期；模型元数据增删改会主动失效，因此可以取较长时间。
+const modelTagsCacheTTL = 5 * time.Minute
+
+// GetModelTagsByModelName 返回模型元数据上配置的标签，未登记或已禁用时返回 nil。
+func GetModelTagsByModelName(modelName string) []string {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" || DB == nil {
+		return nil
+	}
+
+	modelTagsCache.mu.RLock()
+	entry, ok := modelTagsCache.entries[modelName]
+	modelTagsCache.mu.RUnlock()
+	if ok && time.Now().Before(entry.expireAt) {
+		return entry.tags
+	}
+
+	var tags string
+	err := DB.Model(&Model{}).Where("model_name = ? AND status = ?", modelName, 1).Pluck("tags", &tags).Error
+	if err != nil {
+		common.SysError("failed to query model tags: " + err.Error())
+		return nil
+	}
+	parsed := make([]string, 0, 4)
+	for _, tag := range strings.Split(tags, ",") {
+		if tag = strings.TrimSpace(tag); tag != "" {
+			parsed = append(parsed, tag)
+		}
+	}
+	if len(parsed) == 0 {
+		parsed = nil
+	}
+
+	modelTagsCache.mu.Lock()
+	modelTagsCache.entries[modelName] = modelTagsEntry{tags: parsed, expireAt: time.Now().Add(modelTagsCacheTTL)}
+	modelTagsCache.mu.Unlock()
+	return parsed
+}
+
+// InvalidateModelTagsCache 清空模型标签缓存（模型元数据变更后调用）。
+func InvalidateModelTagsCache() {
+	modelTagsCache.mu.Lock()
+	modelTagsCache.entries = map[string]modelTagsEntry{}
+	modelTagsCache.mu.Unlock()
+}
+
 // EnrichModels 从渠道缓存填充附加信息：提供该模型的渠道、可用分组；
 // 前缀 / 后缀 / 包含规则的元数据汇总所有命中的已启用模型。
 func EnrichModels(models []*Model) {
@@ -209,19 +285,14 @@ func EnrichModels(models []*Model) {
 	if cache == nil || len(models) == 0 {
 		return
 	}
-	// 模型名 -> 渠道 / 分组
+	// 模型名 -> 渠道
 	channelsByModel := make(map[string]map[int]*Channel)
-	groupsByModel := make(map[string]map[string]bool)
-	for group, byModel := range cache.byGroupModel {
-		for name, channels := range byModel {
-			if groupsByModel[name] == nil {
-				groupsByModel[name] = make(map[string]bool)
-				channelsByModel[name] = make(map[int]*Channel)
-			}
-			groupsByModel[name][group] = true
-			for _, ch := range channels {
-				channelsByModel[name][ch.Id] = ch
-			}
+	for name, channels := range cache.byModel {
+		if channelsByModel[name] == nil {
+			channelsByModel[name] = make(map[int]*Channel)
+		}
+		for _, ch := range channels {
+			channelsByModel[name][ch.Id] = ch
 		}
 	}
 
@@ -238,13 +309,9 @@ func EnrichModels(models []*Model) {
 		sort.Strings(matched)
 
 		channelSet := make(map[int]*Channel)
-		groupSet := make(map[string]bool)
 		for _, name := range matched {
 			for id, ch := range channelsByModel[name] {
 				channelSet[id] = ch
-			}
-			for g := range groupsByModel[name] {
-				groupSet[g] = true
 			}
 		}
 		ids := make([]int, 0, len(channelSet))
@@ -256,11 +323,6 @@ func EnrichModels(models []*Model) {
 		for _, id := range ids {
 			m.BoundChannels = append(m.BoundChannels, BoundChannel{Name: channelSet[id].Name, Type: channelSet[id].Type})
 		}
-		m.EnableGroups = make([]string, 0, len(groupSet))
-		for g := range groupSet {
-			m.EnableGroups = append(m.EnableGroups, g)
-		}
-		sort.Strings(m.EnableGroups)
 		if m.NameRule != NameRuleExact {
 			m.MatchedModels = matched
 			m.MatchedCount = len(matched)

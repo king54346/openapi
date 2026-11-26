@@ -22,10 +22,9 @@ const (
 // ChannelFilter 渠道筛选条件，零值字段不参与过滤。
 type ChannelFilter struct {
 	Keyword string              // id 精确、名称与 base_url 模糊、完整 key 精确
-	Group   string              // 分组（逗号分隔的 group 列中的一项）
 	Model   string              // 模型名模糊匹配
 	Status  ChannelStatusFilter // 状态
-	Type    int                 // 渠道类型，0（Unknown）表示不过滤
+	Type    int                 // 渠道类型，0（tokens.Unknown）表示不过滤
 	IdSort  bool                // true 按 id 倒序，否则按优先级倒序
 }
 
@@ -38,13 +37,6 @@ func (f ChannelFilter) where(tx *gorm.DB, withType bool) *gorm.DB {
 	}
 	if m := strings.TrimSpace(f.Model); m != "" {
 		tx = tx.Where("models LIKE ?", "%"+m+"%")
-	}
-	if g := strings.TrimSpace(f.Group); g != "" && g != "null" {
-		groupExpr := "(',' || " + commonGroupCol + " || ',')"
-		if usingMySQL {
-			groupExpr = "CONCAT(',', " + commonGroupCol + ", ',')"
-		}
-		tx = tx.Where(groupExpr+" LIKE ?", "%,"+g+",%")
 	}
 	switch f.Status {
 	case ChannelStatusOnlyEnabled:

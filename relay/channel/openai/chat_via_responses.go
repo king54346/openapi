@@ -12,7 +12,8 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service"
+	"openapi/service/compat"
+	"openapi/service/tokens"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -43,7 +44,7 @@ func OaiResponsesToChatHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
 	}
 
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	var responsesResp dto.OpenAIResponsesResponse
 	body, err := io.ReadAll(resp.Body)
@@ -60,14 +61,14 @@ func OaiResponsesToChatHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 	}
 
 	chatId := helper.GetResponseID(c)
-	chatResp, usage, err := service.ResponsesResponseToChatCompletionsResponse(&responsesResp, chatId)
+	chatResp, usage, err := compat.ResponsesResponseToChatCompletionsResponse(&responsesResp, chatId)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 
 	if usage == nil || usage.TotalTokens == 0 {
-		text := service.ExtractOutputTextFromResponses(&responsesResp)
-		usage = service.EstimateUsageFromText(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		text := compat.ExtractOutputTextFromResponses(&responsesResp)
+		usage = tokens.EstimateUsageFromText(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
 		chatResp.Usage = *usage
 	}
 
@@ -76,7 +77,7 @@ func OaiResponsesToChatHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 		return nil, types.NewOpenAIError(err, types.ErrorCodeJsonMarshalFailed, http.StatusInternalServerError)
 	}
 
-	service.IOCopyBytesGracefully(c, resp, chatBody)
+	httpclient.IOCopyBytesGracefully(c, resp, chatBody)
 	return usage, nil
 }
 
@@ -85,7 +86,7 @@ func OaiResponsesToChatStreamHandler(c gin.Context, info *relaycommon.RelayInfo,
 		return nil, types.NewOpenAIError(fmt.Errorf("invalid response"), types.ErrorCodeBadResponse, http.StatusInternalServerError)
 	}
 
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	responseId := helper.GetResponseID(c)
 	createAt := time.Now().Unix()
@@ -452,7 +453,7 @@ func OaiResponsesToChatStreamHandler(c gin.Context, info *relaycommon.RelayInfo,
 	}
 
 	if usage.TotalTokens == 0 {
-		usage = service.EstimateUsageFromText(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = tokens.EstimateUsageFromText(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 	}
 
 	if !sentStart {

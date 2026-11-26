@@ -14,7 +14,7 @@ import (
 	"openapi/model"
 	"openapi/relay/channel"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
+	"openapi/service/relayerr"
 
 	gin "github.com/king54346/gin-tiny"
 	"github.com/pkg/errors"
@@ -148,20 +148,20 @@ func (a *TaskAdaptor) DoRequest(c gin.Context, info *relaycommon.RelayInfo, requ
 func (a *TaskAdaptor) DoResponse(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (taskID string, taskData []byte, taskErr *dto.TaskError) {
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		taskErr = service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
+		taskErr = relayerr.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
 		return
 	}
 	_ = resp.Body.Close()
 
-	// Parse Doubao response
+	// cron.Parse Doubao response
 	var dResp responsePayload
 	if err := common.Unmarshal(responseBody, &dResp); err != nil {
-		taskErr = service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
+		taskErr = relayerr.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
 		return
 	}
 
 	if dResp.ID == "" {
-		taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
+		taskErr = relayerr.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
 		return
 	}
 
@@ -193,7 +193,7 @@ func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+key)
 
-	client, err := service.GetHttpClientWithProxy(proxy)
+	client, err := httpclient.GetHttpClientWithProxy(proxy)
 	if err != nil {
 		return nil, fmt.Errorf("new proxy http client failed: %w", err)
 	}
@@ -321,7 +321,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Progress = "100%"
 		taskResult.Reason = "task failed"
 	default:
-		// Unknown status, treat as processing
+		// tokens.Unknown status, treat as processing
 		taskResult.Status = model.TaskStatusInProgress
 		taskResult.Progress = "30%"
 	}

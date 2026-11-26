@@ -11,7 +11,7 @@ import (
 	"openapi/logger"
 	"openapi/model"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
+	"openapi/service/tokens"
 
 	gin "github.com/king54346/gin-tiny"
 )
@@ -23,7 +23,7 @@ type UsageRecord struct {
 	CompletionTokens int
 	CachedTokens     int
 	// Usage 上游返回的完整 usage（含音频、图片等细分）；上游未返回时为本地估算值
-	Usage *dto.Usage
+	Usage *Usage
 	// Estimated 为 true 表示上游没有返回完整 usage，部分或全部 token 来自本地估算
 	Estimated      bool
 	UseTimeSeconds int
@@ -45,7 +45,7 @@ func SetUsageRecorder(r UsageRecorder) {
 }
 
 // recordUsage 汇总 usage 并交给 usageRecorder，usage 为 nil 时按估算的 prompt token 记录
-func recordUsage(c gin.Context, info *relaycommon.RelayInfo, usage *dto.Usage, extra map[string]any) {
+func recordUsage(c gin.Context, info *relaycommon.RelayInfo, usage *Usage, extra map[string]any) {
 	record := UsageRecord{
 		ModelName:      info.OriginModelName,
 		UseTimeSeconds: int(time.Since(info.StartTime).Seconds()),
@@ -54,7 +54,7 @@ func recordUsage(c gin.Context, info *relaycommon.RelayInfo, usage *dto.Usage, e
 	}
 	if usage == nil {
 		record.Estimated = true
-		usage = service.NewUsage(info.GetEstimatePromptTokens(), 0)
+		usage = tokens.NewUsage(info.GetEstimatePromptTokens(), 0)
 	}
 	record.Usage = usage
 	record.PromptTokens = usage.PromptTokens
@@ -80,7 +80,7 @@ func recordUsage(c gin.Context, info *relaycommon.RelayInfo, usage *dto.Usage, e
 
 // cachedTokensOf 统一缓存命中 token：优先 prompt_tokens_details.cached_tokens，
 // 其次顶层 prompt_cache_hit_tokens（DeepSeek 等）
-func cachedTokensOf(usage *dto.Usage) int {
+func cachedTokensOf(usage *Usage) int {
 	if usage.PromptTokensDetails.CachedTokens > 0 {
 		return usage.PromptTokensDetails.CachedTokens
 	}
@@ -88,11 +88,11 @@ func cachedTokensOf(usage *dto.Usage) int {
 }
 
 // realtimeUsageToUsage 把 realtime 的 input/output 用量转换为通用 Usage
-func realtimeUsageToUsage(u *dto.RealtimeUsage) *dto.Usage {
+func realtimeUsageToUsage(u *dto.RealtimeUsage) *Usage {
 	if u == nil {
 		return nil
 	}
-	usage := &dto.Usage{
+	usage := &Usage{
 		PromptTokens:     u.InputTokens,
 		CompletionTokens: u.OutputTokens,
 		TotalTokens:      u.TotalTokens,
@@ -146,7 +146,6 @@ func recordUsageLog(c gin.Context, info *relaycommon.RelayInfo, record UsageReco
 		TokenId:          info.TokenId,
 		UseTimeSeconds:   record.UseTimeSeconds,
 		IsStream:         info.IsStream,
-		Group:            info.UsingGroup,
 		Other:            other,
 	})
 }

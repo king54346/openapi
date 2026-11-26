@@ -6,14 +6,13 @@ import (
 
 	"openapi/common"
 	"openapi/dto"
-	"openapi/service"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
 )
 
 func OaiResponsesCompactionHandler(c gin.Context, resp *http.Response) (*dto.Usage, *types.StarAPIError) {
-	defer service.CloseResponseBodyGracefully(resp)
+	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -28,7 +27,7 @@ func OaiResponsesCompactionHandler(c gin.Context, resp *http.Response) (*dto.Usa
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 
-	service.IOCopyBytesGracefully(c, resp, responseBody)
+	httpclient.IOCopyBytesGracefully(c, resp, responseBody)
 
 	usage := dto.Usage{}
 	if compactResp.Usage != nil {

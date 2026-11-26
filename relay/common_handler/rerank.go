@@ -7,7 +7,6 @@ import (
 	"openapi/common"
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
-	"openapi/service"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -19,7 +18,7 @@ func RerankHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.Respon
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
-	service.CloseResponseBodyGracefully(resp)
+	httpclient.CloseResponseBodyGracefully(resp)
 	if common.DebugEnabled {
 		println("reranker response body: ", string(responseBody))
 	}

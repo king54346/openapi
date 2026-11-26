@@ -1,11 +1,3 @@
-// Package database 按配置打开数据库连接，支持 SQLite、MySQL、PostgreSQL。
-//
-// 选择规则与 new-api 一致：
-//   - SQL_DSN 为空或 "local"：SQLite，文件路径取 SQLITE_PATH
-//   - SQL_DSN 以 postgres:// 或 postgresql:// 开头：PostgreSQL
-//   - 其他：MySQL（如 user:pass@tcp(127.0.0.1:3306)/openapi）
-//
-// LOG_SQL_DSN 非空时日志单独存库（规则同上），否则与业务数据共用连接。
 package database
 
 import (
@@ -60,7 +52,7 @@ func ConfigFromEnv() Config {
 		MaxOpenConns:  common.GetEnvOrDefault("SQL_MAX_OPEN_CONNS", 1000),
 		MaxLifetime:   time.Duration(common.GetEnvOrDefault("SQL_MAX_LIFETIME", 60)) * time.Second,
 		SlowThreshold: time.Duration(common.GetEnvOrDefault("SQL_SLOW_THRESHOLD_MS", 500)) * time.Millisecond,
-		Debug:         common.DebugEnabled,
+		Debug:         DebugEnabled,
 	}
 }
 

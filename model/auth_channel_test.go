@@ -88,11 +88,11 @@ func TestValidateUserToken(t *testing.T) {
 func TestUserLookups(t *testing.T) {
 	setupTestDB(t)
 	access := "access-token-123"
-	mustCreate(t, &User{Id: 1, Username: "admin", Password: "x", Role: common.RoleRootUser, Status: 1, Group: "svip", AccessToken: &access})
-	mustCreate(t, &User{Id: 2, Username: "bob", Password: "x", Role: common.RoleCommonUser, Status: 2, Group: "default"})
+	mustCreate(t, &User{Id: 1, Username: "admin", Password: "x", Role: common.RoleRootUser, Status: 1, AccessToken: &access})
+	mustCreate(t, &User{Id: 2, Username: "bob", Password: "x", Role: common.RoleCommonUser, Status: 2})
 
 	u, err := GetUserCache(1)
-	if err != nil || u.Group != "svip" || u.Status != 1 {
+	if err != nil || u.Username != "admin" || u.Status != 1 {
 		t.Fatalf("GetUserCache(1) = %+v, %v", u, err)
 	}
 	if _, err := GetUserCache(99); !errors.Is(err, ErrUserNotFound) {
@@ -122,9 +122,10 @@ func TestTokenLimitParsing(t *testing.T) {
 }
 
 func newChannel(id, channelType, status int, group, models string, priority int64, weight uint) *Channel {
+	_ = group // 分组已移除
 	return &Channel{
 		Id: id, Type: channelType, Status: status, Key: "k", Name: "ch",
-		Group: group, Models: models, Priority: &priority, Weight: &weight,
+		Models: models, Priority: &priority, Weight: &weight,
 	}
 }
 
@@ -172,7 +173,7 @@ func TestChannelSelection(t *testing.T) {
 		t.Fatalf("unknown model should return nil, nil; got %+v, %v", ch, err)
 	}
 
-	if !IsChannelEnabledForGroupModel("vip", "gpt-4o", 1) || IsChannelEnabledForGroupModel("vip", "gpt-4o", 2) {
+	if !IsChannelEnabledForGroupModel("", "gpt-4o", 1) || !IsChannelEnabledForGroupModel("", "gpt-4o", 2) {
 		t.Fatal("IsChannelEnabledForGroupModel mismatch")
 	}
 	if ch, err := CacheGetChannel(1); err != nil || ch.Id != 1 {

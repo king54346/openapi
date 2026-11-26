@@ -37,12 +37,30 @@ func GetAndValidateRequest(c gin.Context, format types.RelayFormat) (request dto
 		request, err = GetAndValidAudioRequest(c, relayMode)
 	case types.RelayFormatOpenAIRealtime:
 		request = &dto.BaseRequest{}
+	case types.RelayFormatClaude:
+		request, err = GetAndValidateClaudeRequest(c)
 	default:
 		return nil, fmt.Errorf("unsupported relay format: %s", format)
 	}
 	return request, err
 }
 
+// GetAndValidateClaudeRequest 解析并校验 Anthropic Messages 请求。
+func GetAndValidateClaudeRequest(c gin.Context) (*dto.ClaudeRequest, error) {
+	request := &dto.ClaudeRequest{}
+	if err := common.UnmarshalBodyReusable(c, request); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(request.Model) == "" {
+		return nil, errors.New("model is required")
+	}
+	if len(request.Messages) == 0 {
+		return nil, errors.New("messages is required")
+	}
+	return request, nil
+}
+
+// GetAndValidAudioRequest 解析音频请求。
 func GetAndValidAudioRequest(c gin.Context, relayMode int) (*dto.AudioRequest, error) {
 	audioRequest := &dto.AudioRequest{}
 	err := common.UnmarshalBodyReusable(c, audioRequest)

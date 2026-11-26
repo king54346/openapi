@@ -77,16 +77,12 @@ func SetApiRouter(router *GinTiny.Engine) {
 			//userRoute.POST("/tokenlog", middleware.CriticalRateLimit(), controller.TokenLog)
 			// GET /api/user/logout - 用户登出
 			userRoute.GET("/logout", controller.Logout)
-			// GET /api/user/groups - 获取用户组列表（公开）
-			userRoute.GET("/groups", controller.GetUserGroups)
 
 			// -------------------- 用户个人信息路由组（需要登录）--------------------
 			// 路径前缀: /api/user
 			selfRoute := userRoute.Group("/")
 			selfRoute.Use(middleware.UserAuth()) // 需要用户登录
 			{
-				// GET /api/user/self/groups - 获取当前用户的用户组
-				selfRoute.GET("/self/groups", controller.GetUserGroups)
 				// GET /api/user/self - 获取当前用户信息
 				selfRoute.GET("/self", controller.GetSelf)
 				// GET /api/user/models - 获取用户可用模型列表
@@ -118,8 +114,6 @@ func SetApiRouter(router *GinTiny.Engine) {
 				adminRoute.POST("/", controller.CreateUser)
 				// POST /api/user/manage - 管理用户（启用/禁用/修改配额等）
 				adminRoute.POST("/manage", controller.ManageUser)
-				// POST /api/user/batch/group - 批量设置用户分组
-				adminRoute.POST("/batch/group", controller.BatchUpdateUserGroup)
 				// PUT /api/user/ - 更新用户信息
 				adminRoute.PUT("/", controller.UpdateUser)
 				// DELETE /api/user/:id - 删除用户
@@ -388,17 +382,6 @@ func SetApiRouter(router *GinTiny.Engine) {
 			// GET /api/log/token - 通过 API Key 查询日志（支持 CORS）
 			logRoute.GET("/token", controller.GetLogByKey)
 		}
-		// ==================== 用户组路由组 ====================
-		// 路径前缀: /api/group
-		// 权限：管理员
-		// 功能：获取用户组列表
-		groupRoute := apiRouter.Group("/group")
-		groupRoute.Use(middleware.AdminAuth()) // 需要管理员权限
-		{
-			// GET /api/group/ - 获取所有用户组
-			groupRoute.GET("/", controller.GetGroups)
-		}
-
 		// ==================== 预填充组管理路由 ====================
 		// 路径前缀: /api/prefill_group
 		// 权限：管理员

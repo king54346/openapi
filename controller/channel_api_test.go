@@ -180,12 +180,12 @@ func TestChannelListModesAndFetchModels(t *testing.T) {
 	if raw := s.ok(admin, http.MethodGet, "/api/channel/?p=99", nil); !strings.Contains(string(raw), `"items":[]`) || decode[listResp](t, raw).Total != 4 {
 		t.Fatalf("page out of range: %s", raw)
 	}
-	// 搜索在数据库分页：完整 key 精确匹配、group 过滤
+	// 搜索在数据库分页：完整 key 精确匹配、模型模糊匹配
 	if r := decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/search?keyword=sk-d1", nil)); r.Total != 1 || r.Items[0].Name != "d1" {
 		t.Fatalf("search by key: %+v", r)
 	}
-	if r := decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/search?group=default&model=b&page_size=2", nil)); r.Total != 4 || len(r.Items) != 2 {
-		t.Fatalf("search by group: total=%d items=%d", r.Total, len(r.Items))
+	if r := decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/search?model=b&page_size=2", nil)); r.Total != 4 || len(r.Items) != 2 {
+		t.Fatalf("search by model: total=%d items=%d", r.Total, len(r.Items))
 	}
 	search := decode[listResp](t, s.ok(admin, http.MethodGet, "/api/channel/search?keyword=o&status=disabled", nil))
 	if search.Total != 1 || search.Items[0].Name != "o2" {

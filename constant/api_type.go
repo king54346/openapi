@@ -9,6 +9,7 @@ const (
 	APITypeMiniMax
 	APITypeDeepSeek
 	APITypeVolcEngine
+	APITypeAnthropic
 	APITypeDummy // 仅用于计数，不要在其后添加
 )
 
@@ -29,6 +30,8 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		return APITypeDeepSeek, true
 	case ChannelTypeVolcEngine:
 		return APITypeVolcEngine, true
+	case ChannelTypeAnthropic:
+		return APITypeAnthropic, true
 	}
 	return -1, false
 }

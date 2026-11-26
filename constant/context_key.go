@@ -14,7 +14,6 @@ const (
 	ContextKeyTokenUnlimited         ContextKey = "token_unlimited_quota"
 	ContextKeyTokenKey               ContextKey = "token_key"
 	ContextKeyTokenId                ContextKey = "token_id"
-	ContextKeyTokenGroup             ContextKey = "token_group"
 	ContextKeyTokenSpecificChannelId ContextKey = "specific_channel_id"
 	ContextKeyTokenModelLimitEnabled ContextKey = "token_model_limit_enabled"
 	ContextKeyTokenModelLimit        ContextKey = "token_model_limit"
@@ -38,18 +37,12 @@ const (
 	ContextKeyChannelMultiKeyIndex     ContextKey = "channel_multi_key_index"
 	ContextKeyChannelKey               ContextKey = "channel_key"
 
-	ContextKeyAutoGroup           ContextKey = "auto_group"
-	ContextKeyAutoGroupIndex      ContextKey = "auto_group_index"
-	ContextKeyAutoGroupRetryIndex ContextKey = "auto_group_retry_index"
-
 	/* user related keys */
 	ContextKeyUserId      ContextKey = "id"
 	ContextKeyUserSetting ContextKey = "user_setting"
 	ContextKeyUserQuota   ContextKey = "user_quota"
 	ContextKeyUserStatus  ContextKey = "user_status"
 	ContextKeyUserEmail   ContextKey = "user_email"
-	ContextKeyUserGroup   ContextKey = "user_group"
-	ContextKeyUsingGroup  ContextKey = "group"
 	ContextKeyUserName    ContextKey = "username"
 
 	ContextKeyUsageEstimated ContextKey = "usage_estimated"

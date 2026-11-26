@@ -12,7 +12,6 @@ import (
 	"openapi/constant"
 	"openapi/dto"
 	relayconstant "openapi/relay/constant"
-	"openapi/types"
 
 	"github.com/gorilla/websocket"
 	gin "github.com/king54346/gin-tiny"
@@ -52,8 +51,8 @@ type ChannelMeta struct {
 	ChannelCreateTime    int64
 	ParamOverride        map[string]interface{}
 	HeadersOverride      map[string]interface{}
-	ChannelSetting       dto.ChannelSettings
-	ChannelOtherSettings dto.ChannelOtherSettings
+	ChannelSetting       ChannelSettings
+	ChannelOtherSettings ChannelOtherSettings
 	UpstreamModelName    string
 	IsModelMapped        bool
 	SupportStreamOptions bool // 是否支持流式选项
@@ -67,10 +66,7 @@ type TokenCountMeta struct {
 type RelayInfo struct {
 	TokenId            int
 	TokenKey           string
-	TokenGroup         string
 	UserId             int
-	UsingGroup         string // 使用的分组，当auto跨分组重试时，会变动
-	UserGroup          string // 用户所在分组
 	TokenUnlimited     bool
 	StartTime          time.Time
 	FirstResponseTime  time.Time
@@ -90,17 +86,17 @@ type RelayInfo struct {
 	IsFirstRequest     bool
 	AudioUsage         bool
 	ReasoningEffort    string
-	UserSetting        dto.UserSetting
+	UserSetting        UserSetting
 	UserEmail          string
-	RelayFormat        types.RelayFormat
+	RelayFormat        RelayFormat
 	SendResponseCount  int
 	RequestId          string
 	IsChannelTest      bool // 渠道测试请求
 
-	Request dto.Request
+	Request Request
 
 	// RequestConversionChain 按顺序记录请求格式的转换，例如 ["openai", "openai_responses"]
-	RequestConversionChain []types.RelayFormat
+	RequestConversionChain []RelayFormat
 
 	ThinkingContentInfo
 	TokenCountMeta
@@ -114,7 +110,7 @@ func (info *RelayInfo) InitChannelMeta(c gin.Context) {
 	channelType := common.GetContextKeyInt(c, constant.ContextKeyChannelType)
 	paramOverride := common.GetContextKeyStringMap(c, constant.ContextKeyChannelParamOverride)
 	headerOverride := common.GetContextKeyStringMap(c, constant.ContextKeyChannelHeaderOverride)
-	apiType, _ := constant.ChannelType2APIType(channelType)
+	apiType, _ := ChannelType2APIType(channelType)
 	channelMeta := &ChannelMeta{
 		ChannelType:          channelType,
 		ChannelId:            common.GetContextKeyInt(c, constant.ContextKeyChannelId),
@@ -133,12 +129,12 @@ func (info *RelayInfo) InitChannelMeta(c gin.Context) {
 		SupportStreamOptions: false,
 	}
 
-	channelSetting, ok := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
+	channelSetting, ok := common.GetContextKeyType[ChannelSettings](c, constant.ContextKeyChannelSetting)
 	if ok {
 		channelMeta.ChannelSetting = channelSetting
 	}
 
-	channelOtherSettings, ok := common.GetContextKeyType[dto.ChannelOtherSettings](c, constant.ContextKeyChannelOtherSetting)
+	channelOtherSettings, ok := common.GetContextKeyType[ChannelOtherSettings](c, constant.ContextKeyChannelOtherSetting)
 	if ok {
 		channelMeta.ChannelOtherSettings = channelOtherSettings
 	}
@@ -176,8 +172,8 @@ func (info *RelayInfo) ToString() string {
 	fmt.Fprintf(b, "SendResponseCount: %d, ", info.SendResponseCount)
 
 	// User & token info (mask secrets)
-	fmt.Fprintf(b, "User{ Id: %d, Email: %q, Group: %q, UsingGroup: %q }, ",
-		info.UserId, common.MaskEmail(info.UserEmail), info.UserGroup, info.UsingGroup)
+	fmt.Fprintf(b, "User{ Id: %d, Email: %q }, ",
+		info.UserId, common.MaskEmail(info.UserEmail))
 	fmt.Fprintf(b, "Token{ Id: %d, Unlimited: %t, Key: ***masked*** }, ", info.TokenId, info.TokenUnlimited)
 
 	// Time info
@@ -227,15 +223,15 @@ func (info *RelayInfo) ToString() string {
 
 // 定义支持流式选项的通道类型
 var streamSupportedChannels = map[int]bool{
-	constant.ChannelTypeOpenAI:     true,
-	constant.ChannelTypeVolcEngine: true,
-	constant.ChannelTypeDeepSeek:   true,
-	constant.ChannelTypeAli:        true,
+	ChannelTypeOpenAI:     true,
+	ChannelTypeVolcEngine: true,
+	ChannelTypeDeepSeek:   true,
+	ChannelTypeAli:        true,
 }
 
 func GenRelayInfoWs(c gin.Context, ws *websocket.Conn) *RelayInfo {
 	info := genBaseRelayInfo(c, nil)
-	info.RelayFormat = types.RelayFormatOpenAIRealtime
+	info.RelayFormat = RelayFormatOpenAIRealtime
 	info.ClientWs = ws
 	info.InputAudioFormat = "pcm16"
 	info.OutputAudioFormat = "pcm16"
@@ -245,8 +241,8 @@ func GenRelayInfoWs(c gin.Context, ws *websocket.Conn) *RelayInfo {
 
 func GenRelayInfoRerank(c gin.Context, request *dto.RerankRequest) *RelayInfo {
 	info := genBaseRelayInfo(c, request)
-	info.RelayMode = relayconstant.RelayModeRerank
-	info.RelayFormat = types.RelayFormatRerank
+	info.RelayMode = relayRelayModeRerank
+	info.RelayFormat = RelayFormatRerank
 	info.RerankerInfo = &RerankerInfo{
 		Documents:       request.Documents,
 		ReturnDocuments: request.GetReturnDocuments(),
@@ -254,22 +250,22 @@ func GenRelayInfoRerank(c gin.Context, request *dto.RerankRequest) *RelayInfo {
 	return info
 }
 
-func GenRelayInfoOpenAIAudio(c gin.Context, request dto.Request) *RelayInfo {
+func GenRelayInfoOpenAIAudio(c gin.Context, request Request) *RelayInfo {
 	info := genBaseRelayInfo(c, request)
-	info.RelayFormat = types.RelayFormatOpenAIAudio
+	info.RelayFormat = RelayFormatOpenAIAudio
 	return info
 }
 
-func GenRelayInfoEmbedding(c gin.Context, request dto.Request) *RelayInfo {
+func GenRelayInfoEmbedding(c gin.Context, request Request) *RelayInfo {
 	info := genBaseRelayInfo(c, request)
-	info.RelayFormat = types.RelayFormatEmbedding
+	info.RelayFormat = RelayFormatEmbedding
 	return info
 }
 
 func GenRelayInfoResponses(c gin.Context, request *dto.OpenAIResponsesRequest) *RelayInfo {
 	info := genBaseRelayInfo(c, request)
-	info.RelayMode = relayconstant.RelayModeResponses
-	info.RelayFormat = types.RelayFormatOpenAIResponses
+	info.RelayMode = relayRelayModeResponses
+	info.RelayFormat = RelayFormatOpenAIResponses
 
 	info.ResponsesUsageInfo = &ResponsesUsageInfo{
 		BuiltInTools: make(map[string]*BuildInToolInfo),
@@ -294,29 +290,23 @@ func GenRelayInfoResponses(c gin.Context, request *dto.OpenAIResponsesRequest) *
 	return info
 }
 
-func GenRelayInfoImage(c gin.Context, request dto.Request) *RelayInfo {
+func GenRelayInfoImage(c gin.Context, request Request) *RelayInfo {
 	info := genBaseRelayInfo(c, request)
-	info.RelayFormat = types.RelayFormatOpenAIImage
+	info.RelayFormat = RelayFormatOpenAIImage
 	return info
 }
 
-func GenRelayInfoOpenAI(c gin.Context, request dto.Request) *RelayInfo {
+func GenRelayInfoOpenAI(c gin.Context, request Request) *RelayInfo {
 	info := genBaseRelayInfo(c, request)
-	info.RelayFormat = types.RelayFormatOpenAI
+	info.RelayFormat = RelayFormatOpenAI
 	return info
 }
 
-func genBaseRelayInfo(c gin.Context, request dto.Request) *RelayInfo {
+func genBaseRelayInfo(c gin.Context, request Request) *RelayInfo {
 
 	//channelType := common.GetContextKeyInt(c, constant.ContextKeyChannelType)
 	//channelId := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
 	//paramOverride := common.GetContextKeyStringMap(c, constant.ContextKeyChannelParamOverride)
-
-	tokenGroup := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
-	// 当令牌分组为空时，表示使用用户分组
-	if tokenGroup == "" {
-		tokenGroup = common.GetContextKeyString(c, constant.ContextKeyUserGroup)
-	}
 
 	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
 	if startTime.IsZero() {
@@ -338,18 +328,15 @@ func genBaseRelayInfo(c gin.Context, request dto.Request) *RelayInfo {
 	info := &RelayInfo{
 		Request: request,
 
-		RequestId:  reqId,
-		UserId:     common.GetContextKeyInt(c, constant.ContextKeyUserId),
-		UsingGroup: common.GetContextKeyString(c, constant.ContextKeyUsingGroup),
-		UserGroup:  common.GetContextKeyString(c, constant.ContextKeyUserGroup),
-		UserEmail:  common.GetContextKeyString(c, constant.ContextKeyUserEmail),
+		RequestId: reqId,
+		UserId:    common.GetContextKeyInt(c, constant.ContextKeyUserId),
+		UserEmail: common.GetContextKeyString(c, constant.ContextKeyUserEmail),
 
 		OriginModelName: common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
 
 		TokenId:        common.GetContextKeyInt(c, constant.ContextKeyTokenId),
 		TokenKey:       common.GetContextKeyString(c, constant.ContextKeyTokenKey),
 		TokenUnlimited: common.GetContextKeyBool(c, constant.ContextKeyTokenUnlimited),
-		TokenGroup:     tokenGroup,
 
 		isFirstResponse: true,
 		RelayMode:       relayconstant.Path2RelayMode(c.Request().URL.Path),
@@ -368,7 +355,7 @@ func genBaseRelayInfo(c gin.Context, request dto.Request) *RelayInfo {
 		},
 	}
 
-	if info.RelayMode == relayconstant.RelayModeUnknown {
+	if info.RelayMode == relayRelayModeUnknown {
 		info.RelayMode = c.GetInt("relay_mode")
 	}
 
@@ -378,7 +365,7 @@ func genBaseRelayInfo(c gin.Context, request dto.Request) *RelayInfo {
 		info.RequestURLPath = "/v1" + info.RequestURLPath
 	}
 
-	userSetting, ok := common.GetContextKeyType[dto.UserSetting](c, constant.ContextKeyUserSetting)
+	userSetting, ok := common.GetContextKeyType[UserSetting](c, constant.ContextKeyUserSetting)
 	if ok {
 		info.UserSetting = userSetting
 	}
@@ -386,38 +373,38 @@ func genBaseRelayInfo(c gin.Context, request dto.Request) *RelayInfo {
 	return info
 }
 
-func GenRelayInfo(c gin.Context, relayFormat types.RelayFormat, request dto.Request, ws *websocket.Conn) (*RelayInfo, error) {
+func GenRelayInfo(c gin.Context, relayFormat RelayFormat, request Request, ws *websocket.Conn) (*RelayInfo, error) {
 	var info *RelayInfo
 	var err error
 	switch relayFormat {
-	case types.RelayFormatOpenAI:
+	case RelayFormatOpenAI:
 		info = GenRelayInfoOpenAI(c, request)
-	case types.RelayFormatOpenAIAudio:
+	case RelayFormatOpenAIAudio:
 		info = GenRelayInfoOpenAIAudio(c, request)
-	case types.RelayFormatOpenAIImage:
+	case RelayFormatOpenAIImage:
 		info = GenRelayInfoImage(c, request)
-	case types.RelayFormatOpenAIRealtime:
+	case RelayFormatOpenAIRealtime:
 		info = GenRelayInfoWs(c, ws)
-	case types.RelayFormatRerank:
+	case RelayFormatRerank:
 		if request, ok := request.(*dto.RerankRequest); ok {
 			info = GenRelayInfoRerank(c, request)
 			break
 		}
 		err = errors.New("request is not a RerankRequest")
-	case types.RelayFormatEmbedding:
+	case RelayFormatEmbedding:
 		info = GenRelayInfoEmbedding(c, request)
-	case types.RelayFormatOpenAIResponses:
+	case RelayFormatOpenAIResponses:
 		if request, ok := request.(*dto.OpenAIResponsesRequest); ok {
 			info = GenRelayInfoResponses(c, request)
 			break
 		}
 		err = errors.New("request is not a OpenAIResponsesRequest")
-	case types.RelayFormatOpenAIResponsesCompaction:
+	case RelayFormatOpenAIResponsesCompaction:
 		if request, ok := request.(*dto.OpenAIResponsesCompactionRequest); ok {
 			return GenRelayInfoResponsesCompaction(c, request), nil
 		}
 		return nil, errors.New("request is not a OpenAIResponsesCompactionRequest")
-	case types.RelayFormatTask:
+	case RelayFormatTask:
 		info = genBaseRelayInfo(c, nil)
 	default:
 		err = errors.New("invalid relay format")
@@ -444,10 +431,10 @@ func (info *RelayInfo) InitRequestConversionChain() {
 	if info.RelayFormat == "" {
 		return
 	}
-	info.RequestConversionChain = []types.RelayFormat{info.RelayFormat}
+	info.RequestConversionChain = []RelayFormat{info.RelayFormat}
 }
 
-func (info *RelayInfo) AppendRequestConversion(format types.RelayFormat) {
+func (info *RelayInfo) AppendRequestConversion(format RelayFormat) {
 	if info == nil {
 		return
 	}
@@ -455,7 +442,7 @@ func (info *RelayInfo) AppendRequestConversion(format types.RelayFormat) {
 		return
 	}
 	if len(info.RequestConversionChain) == 0 {
-		info.RequestConversionChain = []types.RelayFormat{format}
+		info.RequestConversionChain = []RelayFormat{format}
 		return
 	}
 	last := info.RequestConversionChain[len(info.RequestConversionChain)-1]
@@ -467,10 +454,10 @@ func (info *RelayInfo) AppendRequestConversion(format types.RelayFormat) {
 
 func GenRelayInfoResponsesCompaction(c gin.Context, request *dto.OpenAIResponsesCompactionRequest) *RelayInfo {
 	info := genBaseRelayInfo(c, request)
-	if info.RelayMode == relayconstant.RelayModeUnknown {
-		info.RelayMode = relayconstant.RelayModeResponsesCompact
+	if info.RelayMode == relayRelayModeUnknown {
+		info.RelayMode = relayRelayModeResponsesCompact
 	}
-	info.RelayFormat = types.RelayFormatOpenAIResponsesCompaction
+	info.RelayFormat = RelayFormatOpenAIResponsesCompaction
 	return info
 }
 
@@ -699,10 +686,10 @@ func FailTaskInfo(reason string) *TaskInfo {
 }
 
 // RemoveDisabledFields 从请求 JSON 数据中移除渠道设置中禁用的字段
-// service_tier: 服务层级字段，可能导致额外计费（OpenAI、Claude、Responses API 支持）
-// store: 数据存储授权字段，涉及用户隐私（仅 OpenAI、Responses API 支持，默认允许透传，禁用后可能导致 Codex 无法使用）
-// safety_identifier: 安全标识符，用于向 OpenAI 报告违规用户（仅 OpenAI 支持，涉及用户隐私）
-func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOtherSettings) ([]byte, error) {
+// service_tier: 服务层级字段，可能导致额外计费（tokens.OpenAI、tokens.Claude、Responses API 支持）
+// store: 数据存储授权字段，涉及用户隐私（仅 tokens.OpenAI、Responses API 支持，默认允许透传，禁用后可能导致 Codex 无法使用）
+// safety_identifier: 安全标识符，用于向 tokens.OpenAI 报告违规用户（仅 tokens.OpenAI 支持，涉及用户隐私）
+func RemoveDisabledFields(jsonData []byte, channelOtherSettings ChannelOtherSettings) ([]byte, error) {
 	var data map[string]interface{}
 	if err := common.Unmarshal(jsonData, &data); err != nil {
 		common.SysError("RemoveDisabledFields Unmarshal error :" + err.Error())
@@ -723,7 +710,7 @@ func RemoveDisabledFields(jsonData []byte, channelOtherSettings dto.ChannelOther
 		}
 	}
 
-	// 默认移除 safety_identifier，除非明确允许（保护用户隐私，避免向 OpenAI 报告用户信息）
+	// 默认移除 safety_identifier，除非明确允许（保护用户隐私，避免向 tokens.OpenAI 报告用户信息）
 	if !channelOtherSettings.AllowSafetyIdentifier {
 		if _, exists := data["safety_identifier"]; exists {
 			delete(data, "safety_identifier")

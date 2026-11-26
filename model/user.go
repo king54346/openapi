@@ -51,16 +51,13 @@ func GetAllUsers(startIdx, num int) ([]*User, int64, error) {
 	return users, total, err
 }
 
-// SearchUsers 按 id、用户名、显示名、邮箱搜索，可按分组过滤。
-func SearchUsers(keyword, group string, startIdx, num int) ([]*User, int64, error) {
+// SearchUsers 按 id、用户名、显示名、邮箱搜索。
+func SearchUsers(keyword string, startIdx, num int) ([]*User, int64, error) {
 	query := DB.Model(&User{})
 	if keyword = strings.TrimSpace(keyword); keyword != "" {
 		like := "%" + keyword + "%"
 		query = query.Where("id = ? OR username LIKE ? OR display_name LIKE ? OR email LIKE ?",
 			common.String2Int(keyword), like, like, like)
-	}
-	if group != "" {
-		query = query.Where(commonGroupCol+" = ?", group)
 	}
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
@@ -86,9 +83,6 @@ func (user *User) Insert(password string) error {
 		return err
 	}
 	user.Password = hash
-	if user.Group == "" {
-		user.Group = "default"
-	}
 	if user.Status == 0 {
 		user.Status = common.UserStatusEnabled
 	}
@@ -140,18 +134,6 @@ func DeleteUserById(id int) error {
 	}
 	InvalidateUserCache(id)
 	return nil
-}
-
-// BatchUpdateUserGroup 批量修改用户分组。
-func BatchUpdateUserGroup(ids []int, group string) (int64, error) {
-	result := DB.Model(&User{}).Where("id IN ?", ids).Update(commonGroupCol, group)
-	if result.Error != nil {
-		return 0, result.Error
-	}
-	for _, id := range ids {
-		InvalidateUserCache(id)
-	}
-	return result.RowsAffected, nil
 }
 
 // ValidateUserLogin 校验用户名和密码，返回用户。
