@@ -75,7 +75,7 @@ func CreateRootUserAndMarkSetup(username, password, displayName string) (*User, 
 		return nil, err
 	}
 
-	setup := &Setup{Id: 1, Version: Version, InitializedAt: common.GetTimestamp()}
+	setup := &Setup{Id: 1, Version: common.Version, InitializedAt: common.GetTimestamp()}
 	if err := DB.Create(setup).Error; err != nil {
 		// setups 写入失败时回滚 root 账号，保持"未初始化"状态可重试
 		if deleteErr := DeleteUserById(root.Id); deleteErr != nil {

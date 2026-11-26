@@ -136,7 +136,7 @@ func TestChannelSelection(t *testing.T) {
 	mustCreate(t, newChannel(2, constant.ChannelTypeDeepSeek, enabled, "default", "gpt-4o", 10, 0))
 	mustCreate(t, newChannel(3, constant.ChannelTypeOpenAI, enabled, "default", "gpt-4o", 0, 0))
 	mustCreate(t, newChannel(4, constant.ChannelTypeOpenAI, common.ChannelStatusManuallyDisabled, "default", "gpt-4o", 100, 0))
-	mustCreate(t, newChannel(5, constant.ChannelTypeGemini, enabled, "default", "gpt-4o", 100, 0)) // 无转发实现
+	mustCreate(t, newChannel(5, constant.ChannelTypeAzure, enabled, "default", "gpt-4o", 100, 0)) // 无转发实现
 
 	if _, err := GetRandomSatisfiedChannel("default", "gpt-4o", 0); err == nil {
 		t.Fatal("expected error before cache init")

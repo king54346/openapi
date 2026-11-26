@@ -1,5 +1,7 @@
 package constant
 
+import "strings"
+
 type TaskPlatform string
 
 const (
@@ -13,3 +15,7 @@ const (
 	TaskActionReferenceGenerate = "referenceGenerate"
 	TaskActionRemix             = "remixGenerate"
 )
+
+func CoverTaskActionToModelName(platform TaskPlatform, action string) string {
+	return strings.ToLower(string(platform)) + "_" + strings.ToLower(action)
+}

@@ -14,7 +14,8 @@ import (
 	"openapi/model"
 	"openapi/relay/channel"
 	relaycommon "openapi/relay/common"
-	"openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
+	httpclient "openapi/service/http"
 
 	gin "github.com/king54346/gin-tiny"
 	"github.com/pkg/errors"
@@ -364,7 +365,7 @@ func (a *TaskAdaptor) DoResponse(c gin.Context, resp *http.Response, info *relay
 		return
 	}
 
-	// 转换为 tokens.OpenAI 格式响应
+	// 转换为 OpenAI 格式响应
 	openAIResp := dto.NewOpenAIVideo()
 	openAIResp.ID = aliResp.Output.TaskID
 	openAIResp.Model = c.GetString("model")
@@ -374,7 +375,7 @@ func (a *TaskAdaptor) DoResponse(c gin.Context, resp *http.Response, info *relay
 	openAIResp.Status = convertAliStatus(aliResp.Output.TaskStatus)
 	openAIResp.CreatedAt = common.GetTimestamp()
 
-	// 返回 tokens.OpenAI 格式
+	// 返回 OpenAI 格式
 	c.JSON(http.StatusOK, openAIResp)
 
 	return aliResp.Output.TaskID, responseBody, nil
@@ -425,15 +426,15 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 	// 状态映射
 	switch aliResp.Output.TaskStatus {
 	case "PENDING":
-		taskResult.Status = TaskStatusQueued
+		taskResult.Status = model.TaskStatusQueued
 	case "RUNNING":
-		taskResult.Status = TaskStatusInProgress
+		taskResult.Status = model.TaskStatusInProgress
 	case "SUCCEEDED":
-		taskResult.Status = TaskStatusSuccess
+		taskResult.Status = model.TaskStatusSuccess
 		// 阿里直接返回视频URL，不需要额外的代理端点
 		taskResult.Url = aliResp.Output.VideoURL
 	case "FAILED", "CANCELED", "UNKNOWN":
-		taskResult.Status = TaskStatusFailure
+		taskResult.Status = model.TaskStatusFailure
 		if aliResp.Message != "" {
 			taskResult.Reason = aliResp.Message
 		} else if aliResp.Output.Message != "" {
@@ -442,7 +443,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 			taskResult.Reason = "task failed"
 		}
 	default:
-		taskResult.Status = TaskStatusQueued
+		taskResult.Status = model.TaskStatusQueued
 	}
 
 	return &taskResult, nil

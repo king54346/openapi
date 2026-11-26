@@ -15,8 +15,8 @@ import (
 	"openapi/relay/channel"
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
-	relayerr "openapi/service/relayerr"
-	"openapi/service/tasks"
+	httpclient "openapi/service/http"
+	relayerr "openapi/relay/relayerr"
 
 	gin "github.com/king54346/gin-tiny"
 )
@@ -110,8 +110,9 @@ func RelayTaskSubmit(c gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.T
 
 	modelName := info.OriginModelName
 	if modelName == "" {
-		modelName = tasks.CoverTaskActionToModelName(platform, info.Action)
+		modelName = constant.CoverTaskActionToModelName(platform, info.Action)
 	}
+
 
 	requestBody, err := adaptor.BuildRequestBody(c, info)
 	if err != nil {
@@ -195,7 +196,7 @@ func videoFetchByIDRespBodyBuilder(c gin.Context) (respBody []byte, taskResp *dt
 		}
 	}
 
-	// /v1/videos/{task_id} 返回 tokens.OpenAI Video 格式；/v1/video/generations/{task_id} 返回任务原始数据
+	// /v1/videos/{task_id} 返回 OpenAI Video 格式；/v1/video/generations/{task_id} 返回任务原始数据
 	if strings.HasPrefix(c.Request().RequestURI, "/v1/videos/") {
 		adaptor := GetTaskAdaptor(originTask.Platform)
 		if adaptor == nil {

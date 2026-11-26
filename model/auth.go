@@ -159,7 +159,7 @@ func IsAdmin(userId int) bool {
 	if err != nil {
 		return false
 	}
-	return user.Role >= RoleAdminUser
+	return user.Role >= common.RoleAdminUser
 }
 
 // splitList 按逗号、换行或空白切分列表并去掉空项。

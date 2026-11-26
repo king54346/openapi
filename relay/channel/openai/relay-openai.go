@@ -13,7 +13,8 @@ import (
 	"openapi/relay/channel/openrouter"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service/tokens"
+	httpclient "openapi/service/http"
+	tokensvc "openapi/service/token"
 	"openapi/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -150,7 +151,7 @@ func OaiStreamHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 			Usage *dto.Usage `json:"usage"`
 		}
 		err := common.Unmarshal([]byte(secondLastStreamData), &streamResp)
-		if err == nil && streamResp.Usage != nil && tokens.ValidUsage(streamResp.Usage) {
+		if err == nil && streamResp.Usage != nil && tokensvc.ValidUsage(streamResp.Usage) {
 			usage = streamResp.Usage
 			containStreamUsage = true
 
@@ -181,7 +182,7 @@ func OaiStreamHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.Res
 	}
 
 	if !containStreamUsage {
-		usage = tokens.EstimateUsageFromText(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = tokensvc.EstimateUsageFromText(c, responseTextBuilder.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 		usage.CompletionTokens += toolCount * 7
 	}
 
@@ -245,12 +246,12 @@ func OpenaiHandler(c gin.Context, info *relaycommon.RelayInfo, resp *http.Respon
 		completionTokens := simpleResponse.Usage.CompletionTokens
 		if completionTokens == 0 {
 			for _, choice := range simpleResponse.Choices {
-				ctkm := tokens.CountTextToken(choice.Message.StringContent()+choice.Message.ReasoningContent+choice.Message.Reasoning, info.UpstreamModelName)
+				ctkm := tokensvc.CountTextToken(choice.Message.StringContent()+choice.Message.ReasoningContent+choice.Message.Reasoning, info.UpstreamModelName)
 				completionTokens += ctkm
 			}
 		}
-		simpleResponse.Usage = *tokens.NewUsage(info.GetEstimatePromptTokens(), completionTokens)
-		tokens.MarkUsageEstimated(c)
+		simpleResponse.Usage = *tokensvc.NewUsage(info.GetEstimatePromptTokens(), completionTokens)
+		tokensvc.MarkUsageEstimated(c)
 		usageModified = true
 	}
 
@@ -369,7 +370,7 @@ func OpenaiRealtimeHandler(c gin.Context, info *relaycommon.RelayInfo) (*types.S
 					}
 				}
 
-				textToken, audioToken := tokens.CountTokenRealtime(info.IsFirstRequest, info.RealtimeTools, *realtimeEvent, info.UpstreamModelName)
+				textToken, audioToken := tokensvc.CountTokenRealtime(info.IsFirstRequest, info.RealtimeTools, *realtimeEvent, info.UpstreamModelName)
 				logger.LogInfo(c, fmt.Sprintf("type: %s, textToken: %d, audioToken: %d", realtimeEvent.Type, textToken, audioToken))
 				localUsage.TotalTokens += textToken + audioToken
 				localUsage.InputTokens += textToken + audioToken
@@ -446,7 +447,7 @@ func OpenaiRealtimeHandler(c gin.Context, info *relaycommon.RelayInfo) (*types.S
 
 						localUsage = &dto.RealtimeUsage{}
 					} else {
-						textToken, audioToken := tokens.CountTokenRealtime(info.IsFirstRequest, info.RealtimeTools, *realtimeEvent, info.UpstreamModelName)
+						textToken, audioToken := tokensvc.CountTokenRealtime(info.IsFirstRequest, info.RealtimeTools, *realtimeEvent, info.UpstreamModelName)
 						logger.LogInfo(c, fmt.Sprintf("type: %s, textToken: %d, audioToken: %d", realtimeEvent.Type, textToken, audioToken))
 						localUsage.TotalTokens += textToken + audioToken
 						info.IsFirstRequest = false
@@ -474,7 +475,7 @@ func OpenaiRealtimeHandler(c gin.Context, info *relaycommon.RelayInfo) (*types.S
 						info.OutputAudioFormat = common.GetStringIfEmpty(realtimeSession.OutputAudioFormat, info.OutputAudioFormat)
 					}
 				} else {
-					textToken, audioToken := tokens.CountTokenRealtime(info.IsFirstRequest, info.RealtimeTools, *realtimeEvent, info.UpstreamModelName)
+					textToken, audioToken := tokensvc.CountTokenRealtime(info.IsFirstRequest, info.RealtimeTools, *realtimeEvent, info.UpstreamModelName)
 					logger.LogInfo(c, fmt.Sprintf("type: %s, textToken: %d, audioToken: %d", realtimeEvent.Type, textToken, audioToken))
 					localUsage.TotalTokens += textToken + audioToken
 					localUsage.OutputTokens += textToken + audioToken

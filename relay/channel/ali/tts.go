@@ -9,9 +9,11 @@ import (
 	"strings"
 
 	"openapi/common"
+	"openapi/dto"
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
-	"openapi/service/tokens"
+	httpclient "openapi/service/http"
+	tokensvc "openapi/service/token"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -63,8 +65,8 @@ type aliTTSResponse struct {
 	Message   string       `json:"message"`
 }
 
-// convertAudioToAliMultimodalTTS 将 tokens.OpenAI TTS 请求转换为阿里多模态 TTS 请求格式
-func convertAudioToAliMultimodalTTS(request AudioRequest) (io.Reader, error) {
+// convertAudioToAliMultimodalTTS 将 OpenAI TTS 请求转换为阿里多模态 TTS 请求格式
+func convertAudioToAliMultimodalTTS(request dto.AudioRequest) (io.Reader, error) {
 	ttsReq := aliTTSRequest{
 		Model: request.Model,
 		Input: aliTTSInput{
@@ -82,7 +84,7 @@ func convertAudioToAliMultimodalTTS(request AudioRequest) (io.Reader, error) {
 
 // aliMultimodalTTSResponseHandler 处理阿里多模态 TTS 的响应
 // 从响应 JSON 中取 output.audio.url，下载音频并以二进制返回给客户端
-func aliMultimodalTTSResponseHandler(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*types.StarAPIError, *Usage) {
+func aliMultimodalTTSResponseHandler(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*types.StarAPIError, *dto.Usage) {
 	defer httpclient.CloseResponseBodyGracefully(resp)
 
 	responseBody, err := io.ReadAll(resp.Body)
@@ -131,7 +133,7 @@ func aliMultimodalTTSResponseHandler(c gin.Context, resp *http.Response, info *r
 		// 按字符数粗估
 		completionTokens = int(math.Ceil(float64(ttsResp.Usage.Characters) / 60.0 * 1000))
 	} else if duration > 0 {
-		completionTokens = AudioDurationToTokens(duration)
+		completionTokens = tokensvc.AudioDurationToTokens(duration)
 	}
-	return nil, tokens.NewUsage(info.GetEstimatePromptTokens(), completionTokens)
+	return nil, tokensvc.NewUsage(info.GetEstimatePromptTokens(), completionTokens)
 }

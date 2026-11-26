@@ -14,7 +14,8 @@ import (
 	"openapi/model"
 	"openapi/relay/channel"
 	relaycommon "openapi/relay/common"
-	"openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
+	httpclient "openapi/service/http"
 
 	gin "github.com/king54346/gin-tiny"
 	"github.com/pkg/errors"
@@ -153,7 +154,7 @@ func (a *TaskAdaptor) DoResponse(c gin.Context, resp *http.Response, info *relay
 	}
 	_ = resp.Body.Close()
 
-	// cron.Parse Doubao response
+	// Parse Doubao response
 	var dResp responsePayload
 	if err := common.Unmarshal(responseBody, &dResp); err != nil {
 		taskErr = relayerr.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
@@ -321,7 +322,7 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Progress = "100%"
 		taskResult.Reason = "task failed"
 	default:
-		// tokens.Unknown status, treat as processing
+		// Unknown status, treat as processing
 		taskResult.Status = model.TaskStatusInProgress
 		taskResult.Progress = "30%"
 	}

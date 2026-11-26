@@ -24,7 +24,7 @@ type ChannelFilter struct {
 	Keyword string              // id 精确、名称与 base_url 模糊、完整 key 精确
 	Model   string              // 模型名模糊匹配
 	Status  ChannelStatusFilter // 状态
-	Type    int                 // 渠道类型，0（tokens.Unknown）表示不过滤
+	Type    int                 // 渠道类型，0（Unknown）表示不过滤
 	IdSort  bool                // true 按 id 倒序，否则按优先级倒序
 }
 

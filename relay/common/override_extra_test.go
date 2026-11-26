@@ -5,7 +5,7 @@ import (
 )
 
 func TestApplyParamOverrideExtraEdges(t *testing.T) {
-	// tokens.Unknown operation should fail fast.
+	// Unknown operation should fail fast.
 	if _, err := ApplyParamOverride([]byte(`{"a":1}`), map[string]interface{}{
 		"operations": []interface{}{map[string]interface{}{"path": "a", "mode": "nope"}},
 	}, nil); err == nil {

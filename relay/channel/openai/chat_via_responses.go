@@ -11,9 +11,10 @@ import (
 	"openapi/dto"
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
+	"openapi/relay/compat"
 	"openapi/relay/helper"
-	"openapi/service/compat"
-	"openapi/service/tokens"
+	httpclient "openapi/service/http"
+	tokensvc "openapi/service/token"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -68,7 +69,7 @@ func OaiResponsesToChatHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 
 	if usage == nil || usage.TotalTokens == 0 {
 		text := compat.ExtractOutputTextFromResponses(&responsesResp)
-		usage = tokens.EstimateUsageFromText(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = tokensvc.EstimateUsageFromText(c, text, info.UpstreamModelName, info.GetEstimatePromptTokens())
 		chatResp.Usage = *usage
 	}
 
@@ -453,7 +454,7 @@ func OaiResponsesToChatStreamHandler(c gin.Context, info *relaycommon.RelayInfo,
 	}
 
 	if usage.TotalTokens == 0 {
-		usage = tokens.EstimateUsageFromText(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
+		usage = tokensvc.EstimateUsageFromText(c, usageText.String(), info.UpstreamModelName, info.GetEstimatePromptTokens())
 	}
 
 	if !sentStart {

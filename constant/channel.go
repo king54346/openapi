@@ -1,6 +1,6 @@
 package constant
 
-// 渠道类型的数值会持久化到数据库（channels.type），不要修改已有取值
+// 渠道类型的数值会持久化到数据库（channelsvc.type），不要修改已有取值
 const (
 	ChannelTypeUnknown     = 0
 	ChannelTypeOpenAI      = 1
@@ -40,12 +40,12 @@ var ChannelBaseURLs = map[int]string{
 }
 
 var ChannelTypeNames = map[int]string{
-	ChannelTypeUnknown:     "tokens.Unknown",
-	ChannelTypeOpenAI:      "tokens.OpenAI",
+	ChannelTypeUnknown:     "Unknown",
+	ChannelTypeOpenAI:      "OpenAI",
 	ChannelTypeAnthropic:   "Anthropic",
 	ChannelTypeAli:         "Ali",
 	ChannelTypeOpenRouter:  "OpenRouter",
-	ChannelTypeGemini:      "tokens.Gemini",
+	ChannelTypeGemini:      "Gemini",
 	ChannelTypeMoonshot:    "Moonshot",
 	ChannelTypeMiniMax:     "MiniMax",
 	ChannelTypeDeepSeek:    "DeepSeek",
@@ -58,10 +58,10 @@ func GetChannelTypeName(channelType int) string {
 	if name, ok := ChannelTypeNames[channelType]; ok {
 		return name
 	}
-	return "tokens.Unknown"
+	return "Unknown"
 }
 
-// ChannelSpecialBase 渠道 BaseURL 填写为特殊套餐名时，改用套餐对应的 tokens.OpenAI 兼容地址
+// ChannelSpecialBase 渠道 BaseURL 填写为特殊套餐名时，改用套餐对应的 OpenAI 兼容地址
 type ChannelSpecialBase struct {
 	OpenAIBaseURL string
 }

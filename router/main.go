@@ -21,7 +21,7 @@ const frontendBaseURLEnv = "FRONTEND_BASE_URL"
 var webFSCandidates = []string{"dist", "web/dist", "build", "web/build", "frontend/dist", "public"}
 
 // apiPathPrefixes 命中这些前缀的未匹配请求返回 JSON 404，不走 SPA 回退
-var apiPathPrefixes = []string{"/api", "/v1", "/pg", "/kling", "/jimeng"}
+var apiPathPrefixes = []string{"/api", "/v1", "/v1beta", "/pg", "/kling", "/jimeng"}
 
 // SetRouter 配置所有路由
 // 这是路由配置的入口函数，负责注册所有模块的路由

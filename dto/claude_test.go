@@ -81,7 +81,7 @@ func TestOpenAIResponseToClaude(t *testing.T) {
 		t.Fatalf("usage: %+v", claude.Usage)
 	}
 
-	// 反向：tokens.Claude 响应转 tokens.OpenAI
+	// 反向：Claude 响应转 OpenAI
 	back := OpenAIResponseFromClaude(claude, "req_1", "")
 	if back.Object != "chat.completion" || len(back.Choices) != 1 {
 		t.Fatalf("openai response: %+v", back)

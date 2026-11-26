@@ -12,6 +12,7 @@ import (
 	"openapi/dto"
 	"openapi/model"
 	relaycommon "openapi/relay/common"
+	httpclient "openapi/service/http"
 
 	gin "github.com/king54346/gin-tiny"
 	"gorm.io/gorm"

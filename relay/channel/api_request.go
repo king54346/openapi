@@ -16,6 +16,7 @@ import (
 	"openapi/relay/common"
 	"openapi/relay/constant"
 	"openapi/relay/helper"
+	httpclient "openapi/service/http"
 	"openapi/setting"
 	"openapi/types"
 

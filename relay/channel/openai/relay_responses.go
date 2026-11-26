@@ -11,7 +11,8 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service/tokens"
+	httpclient "openapi/service/http"
+	tokensvc "openapi/service/token"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -135,14 +136,14 @@ func OaiResponsesStreamHandler(c gin.Context, info *relaycommon.RelayInfo, resp 
 		tempStr := responseTextBuilder.String()
 		if len(tempStr) > 0 {
 			// 非正常结束，使用输出文本的 token 数量
-			usage.CompletionTokens = tokens.CountTextToken(tempStr, info.UpstreamModelName)
-			tokens.MarkUsageEstimated(c)
+			usage.CompletionTokens = tokensvc.CountTextToken(tempStr, info.UpstreamModelName)
+			tokensvc.MarkUsageEstimated(c)
 		}
 	}
 
 	if usage.PromptTokens == 0 && usage.CompletionTokens != 0 {
 		usage.PromptTokens = info.GetEstimatePromptTokens()
-		tokens.MarkUsageEstimated(c)
+		tokensvc.MarkUsageEstimated(c)
 	}
 
 	usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens

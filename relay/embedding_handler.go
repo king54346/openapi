@@ -10,7 +10,7 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	relayerr "openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"

@@ -14,7 +14,7 @@ import (
 	gin "github.com/king54346/gin-tiny"
 )
 
-// OpenAIRequestToClaudeRequest 把 tokens.OpenAI Chat Completions 请求转换成 tokens.Claude Messages 请求。
+// OpenAIRequestToClaudeRequest 把 OpenAI Chat Completions 请求转换成 Claude Messages 请求。
 func OpenAIRequestToClaudeRequest(request *dto.GeneralOpenAIRequest) (*dto.ClaudeRequest, error) {
 	if request == nil {
 		return nil, fmt.Errorf("request is nil")
@@ -161,7 +161,7 @@ func mustMarshal(value any) []byte {
 	return encoded
 }
 
-// convertClaudeResponseForOpenAI 把 tokens.Claude 渠道的响应转换成 tokens.OpenAI 格式返回给客户端。
+// convertClaudeResponseForOpenAI 把 Claude 渠道的响应转换成 OpenAI 格式返回给客户端。
 func convertClaudeResponseForOpenAI(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (any, *types.StarAPIError) {
 	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 		return convertClaudeStreamToOpenAI(c, resp, info)
@@ -181,7 +181,7 @@ func convertClaudeResponseForOpenAI(c gin.Context, resp *http.Response, info *re
 	return claudeUsageToUsage(claudeResp.Usage), nil
 }
 
-// convertClaudeStreamToOpenAI 把 tokens.Claude SSE 事件转换成 tokens.OpenAI chat.completion.chunk。
+// convertClaudeStreamToOpenAI 把 Claude SSE 事件转换成 OpenAI chat.completion.chunk。
 func convertClaudeStreamToOpenAI(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (any, *types.StarAPIError) {
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 64<<10), 64<<20)
@@ -290,7 +290,7 @@ func convertClaudeStreamToOpenAI(c gin.Context, resp *http.Response, info *relay
 	return usage, nil
 }
 
-// copyStreamRaw 原样转发上游 SSE（用于 tokens.Claude 原生透传）。
+// copyStreamRaw 原样转发上游 SSE（用于 Claude 原生透传）。
 func copyStreamRaw(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) {
 	c.Response().Header().Set("Content-Type", "text/event-stream")
 	c.Response().Header().Set("Cache-Control", "no-cache")
@@ -312,7 +312,7 @@ func copyStreamRaw(c gin.Context, resp *http.Response, info *relaycommon.RelayIn
 	}
 }
 
-// writeSSEData 输出一条 tokens.OpenAI 风格的 SSE 数据行。
+// writeSSEData 输出一条 OpenAI 风格的 SSE 数据行。
 func writeSSEData(c gin.Context, data any) error {
 	encoded, err := common.Marshal(data)
 	if err != nil {
@@ -322,7 +322,7 @@ func writeSSEData(c gin.Context, data any) error {
 	return flushWriter(c)
 }
 
-// writeSSEDone 输出 tokens.OpenAI 流的结束标记。
+// writeSSEDone 输出 OpenAI 流的结束标记。
 func writeSSEDone(c gin.Context) error {
 	c.Render(-1, common.CustomEvent{Data: "data: [DONE]"})
 	return flushWriter(c)

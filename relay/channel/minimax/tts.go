@@ -116,7 +116,7 @@ func handleTTSResponse(c gin.Context, resp *http.Response, info *relaycommon.Rel
 	}
 	defer resp.Body.Close()
 
-	// cron.Parse response
+	// Parse response
 	var minimaxResp MiniMaxTTSResponse
 	if unmarshalErr := common.Unmarshal(body, &minimaxResp); unmarshalErr != nil {
 		return nil, types.NewErrorWithStatusCode(

@@ -9,9 +9,8 @@ import (
 	"openapi/dto"
 	"openapi/model"
 	relayconstant "openapi/relay/constant"
-	"openapi/service/channels"
-	"openapi/service/dispatch"
-	"openapi/service/tasks"
+	channelsvc "openapi/service/channel"
+	relaysvc "openapi/service/relay"
 	"openapi/types"
 	"slices"
 	"strconv"
@@ -68,7 +67,7 @@ func Distribute() func(c gin.Context) {
 				if !ok {
 					tokenModelLimit = map[string]bool{}
 				}
-				matchName := dispatch.FormatMatchingModelName(modelRequest.Model) // match gpts & thinking-*
+				matchName := relaysvc.FormatMatchingModelName(modelRequest.Model) // match gpts & thinking-*
 				limitType, _ := c.Get("token_model_limit_type")
 				limitTypeInt, _ := limitType.(int)
 				if limitTypeInt == 1 {
@@ -93,17 +92,17 @@ func Distribute() func(c gin.Context) {
 				}
 
 				// 亲和性优先：同会话复用上次成功的渠道
-				if preferredChannelID, found := channels.GetPreferredChannelByAffinity(c, modelRequest.Model); found {
+				if preferredChannelID, found := channelsvc.GetPreferredChannelByAffinity(c, modelRequest.Model); found {
 					if preferred, prefErr := model.CacheGetChannel(preferredChannelID); prefErr == nil && preferred != nil &&
 						preferred.Status == common.ChannelStatusEnabled &&
 						model.IsChannelEnabledForGroupModel("", modelRequest.Model, preferred.Id) {
 						channel = preferred
-						channels.MarkChannelAffinityUsed(c, preferred.Id)
+						channelsvc.MarkChannelAffinityUsed(c, preferred.Id)
 					}
 				}
 
 				if channel == nil {
-					channel, err = dispatch.CacheGetRandomSatisfiedChannel(&dispatch.RetryParam{
+					channel, err = relaysvc.CacheGetRandomSatisfiedChannel(&relaysvc.RetryParam{
 						Ctx:       c,
 						ModelName: modelRequest.Model,
 						Retry:     common.GetPointer(0),
@@ -125,7 +124,7 @@ func Distribute() func(c gin.Context) {
 		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
 		c.Next()
 		if channel != nil && c.Response() != nil && c.Response().Status() < http.StatusBadRequest {
-			channels.RecordChannelAffinity(c, channel.Id)
+			channelsvc.RecordChannelAffinity(c, channel.Id)
 		}
 	}
 }
@@ -161,7 +160,7 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 			if err != nil {
 				return nil, false, errors.New("无效的midjourney请求, " + err.Error())
 			}
-			midjourneyModel, mjErr, success := dispatch.GetMjRequestModel(relayMode, &midjourneyRequest)
+			midjourneyModel, mjErr, success := relaysvc.GetMjRequestModel(relayMode, &midjourneyRequest)
 			if mjErr != nil {
 				return nil, false, fmt.Errorf("%s", mjErr.Description)
 			}
@@ -182,7 +181,7 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 			relayMode == relayconstant.RelayModeSunoFetchByID {
 			shouldSelectChannel = false
 		} else {
-			modelName := tasks.CoverTaskActionToModelName(constant.TaskPlatformSuno, c.Param("action"))
+			modelName := constant.CoverTaskActionToModelName(constant.TaskPlatformSuno, c.Param("action"))
 			modelRequest.Model = modelName
 		}
 		c.Set("platform", string(constant.TaskPlatformSuno))
@@ -236,7 +235,7 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 			shouldSelectChannel = false
 		}
 	} else if strings.HasPrefix(c.Request().URL.Path, "/v1beta/models/") || strings.HasPrefix(c.Request().URL.Path, "/v1/models/") {
-		// tokens.Gemini API 路径处理: /v1beta/models/gemini-2.0-flash:generateContent
+		// Gemini API 路径处理: /v1beta/models/gemini-2.0-flash:generateContent
 		relayMode := relayconstant.RelayModeGemini
 		modelName := extractModelNameFromGeminiPath(c.Request().URL.Path)
 		if modelName != "" {
@@ -329,90 +328,20 @@ func getModelRequest(c gin.Context) (*ModelRequest, bool, error) {
 	}
 
 	if strings.HasPrefix(c.Request().URL.Path, "/v1/responses/compact") && modelRequest.Model != "" {
-		modelRequest.Model = dispatch.WithCompactModelSuffix(modelRequest.Model)
+		modelRequest.Model = relaysvc.WithCompactModelSuffix(modelRequest.Model)
 	}
 	return &modelRequest, shouldSelectChannel, nil
 }
 
 func SetupContextForSelectedChannel(c gin.Context, channel *model.Channel, modelName string) *types.StarAPIError {
-	c.Set("original_model", modelName) // for retry
-	if channel == nil {
-		return types.NewError(errors.New("channel is nil"), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
-	}
-	common.SetContextKey(c, constant.ContextKeyChannelId, channel.Id)
-	common.SetContextKey(c, constant.ContextKeyChannelName, channel.Name)
-	common.SetContextKey(c, constant.ContextKeyChannelType, channel.Type)
-	common.SetContextKey(c, constant.ContextKeyChannelCreateTime, channel.CreatedTime)
-	common.SetContextKey(c, constant.ContextKeyChannelSetting, channel.GetSetting())
-	common.SetContextKey(c, constant.ContextKeyChannelOtherSetting, channel.GetOtherSettings())
-	common.SetContextKey(c, constant.ContextKeyChannelParamOverride, channel.GetParamOverride())
-	common.SetContextKey(c, constant.ContextKeyChannelHeaderOverride, channel.GetHeaderOverride())
-	if nil != channel.OpenAIOrganization && *channel.OpenAIOrganization != "" {
-		common.SetContextKey(c, constant.ContextKeyChannelOrganization, *channel.OpenAIOrganization)
-	}
-	common.SetContextKey(c, constant.ContextKeyChannelAutoBan, channel.GetAutoBan())
-	common.SetContextKey(c, constant.ContextKeyChannelModelMapping, channel.GetModelMapping())
-	common.SetContextKey(c, constant.ContextKeyChannelStatusCodeMapping, channel.GetStatusCodeMapping())
-
-	key, index, apiErr := channel.GetNextEnabledKey()
-	if apiErr != nil {
-		return apiErr
-	}
-	if channel.ChannelInfo.IsMultiKey {
-		common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, true)
-		common.SetContextKey(c, constant.ContextKeyChannelMultiKeyIndex, index)
-	} else {
-		// 必须设置为 false，否则在重试到单个 key 的时候会导致日志显示错误
-		common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, false)
-	}
-	// c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
-	common.SetContextKey(c, constant.ContextKeyChannelKey, key)
-	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, channel.GetBaseURL())
-
-	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, false)
-
-	// 渠道的 Other 列在不同渠道类型下含义不同，统一在这里写入上下文
-	SetupChannelOtherContext(c, channel)
-	return nil
+	return channelsvc.SetupContextForSelectedChannel(c, channel, modelName)
 }
 
-// SetupChannelOtherContext 把渠道 Other 列解析出的附加信息写入上下文：
-// 版本号类渠道写 api_version（渠道未配置时回退到请求 Query，tokens.Gemini 再回退到默认版本），
-// Vertex AI 写 region，阿里写 plugin，Coze 写 bot_id。
 func SetupChannelOtherContext(c gin.Context, channel *model.Channel) {
-	if channel == nil {
-		return
-	}
-	other := strings.TrimSpace(channel.Other)
-	switch channel.Type {
-	case constant.ChannelTypeAzure, constant.ChannelTypeXunfei,
-		constant.ChannelCloudflare, constant.ChannelTypeMokaAI, constant.ChannelTypeGemini:
-		version := other
-		if version == "" {
-			version = strings.TrimSpace(c.Query("api_version"))
-		}
-		if version == "" && channel.Type == constant.ChannelTypeGemini {
-			version = "v1beta"
-		}
-		if version != "" {
-			c.Set("api_version", version)
-		}
-	case constant.ChannelTypeVertexAi:
-		if other != "" {
-			c.Set("region", other)
-		}
-	case constant.ChannelTypeAli:
-		if other != "" {
-			c.Set("plugin", other)
-		}
-	case constant.ChannelTypeCoze:
-		if other != "" {
-			c.Set("bot_id", other)
-		}
-	}
+	channelsvc.SetupChannelOtherContext(c, channel)
 }
 
-// extractModelNameFromGeminiPath 从 tokens.Gemini API URL 路径中提取模型名
+// extractModelNameFromGeminiPath 从 Gemini API URL 路径中提取模型名
 // 输入格式: /v1beta/models/gemini-2.0-flash:generateContent
 // 输出: gemini-2.0-flash
 func extractModelNameFromGeminiPath(path string) string {

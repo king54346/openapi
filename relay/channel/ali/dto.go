@@ -101,11 +101,11 @@ type AliOutput struct {
 	} `json:"choices,omitempty"`
 }
 
-func (o *AliOutput) ChoicesToOpenAIImageDate(c gin.Context, responseFormat string) []ImageData {
-	var imageData []ImageData
+func (o *AliOutput) ChoicesToOpenAIImageDate(c gin.Context, responseFormat string) []dto.ImageData {
+	var imageData []dto.ImageData
 	if len(o.Choices) > 0 {
 		for _, choice := range o.Choices {
-			var data ImageData
+			var data dto.ImageData
 			for _, content := range choice.Message.Content {
 				if content.Image != "" {
 					if strings.HasPrefix(content.Image, "http") {
@@ -134,8 +134,8 @@ func (o *AliOutput) ChoicesToOpenAIImageDate(c gin.Context, responseFormat strin
 	return imageData
 }
 
-func (o *AliOutput) ResultToOpenAIImageDate(c gin.Context, responseFormat string) []ImageData {
-	var imageData []ImageData
+func (o *AliOutput) ResultToOpenAIImageDate(c gin.Context, responseFormat string) []dto.ImageData {
+	var imageData []dto.ImageData
 	for _, data := range o.Results {
 		var b64Json string
 		if responseFormat == "b64_json" {
@@ -149,7 +149,7 @@ func (o *AliOutput) ResultToOpenAIImageDate(c gin.Context, responseFormat string
 			b64Json = data.B64Image
 		}
 
-		imageData = append(imageData, ImageData{
+		imageData = append(imageData, dto.ImageData{
 			Url:           data.Url,
 			B64Json:       b64Json,
 			RevisedPrompt: "",

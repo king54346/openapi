@@ -10,6 +10,7 @@ const (
 	APITypeDeepSeek
 	APITypeVolcEngine
 	APITypeAnthropic
+	APITypeGemini
 	APITypeDummy // 仅用于计数，不要在其后添加
 )
 
@@ -32,6 +33,8 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		return APITypeVolcEngine, true
 	case ChannelTypeAnthropic:
 		return APITypeAnthropic, true
+	case ChannelTypeGemini:
+		return APITypeGemini, true
 	}
 	return -1, false
 }

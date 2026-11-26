@@ -14,8 +14,8 @@ import (
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
 	"openapi/relay/helper"
-	"openapi/service/compat"
-	relayerr "openapi/service/relayerr"
+	"openapi/relay/compat"
+	relayerr "openapi/relay/relayerr"
 	"openapi/setting"
 	"openapi/types"
 
@@ -151,7 +151,7 @@ func TextHelper(c gin.Context, info *relaycommon.RelayInfo) (apiError *types.Sta
 			return types.NewError(err, types.ErrorCodeJsonMarshalFailed, types.ErrOptionWithSkipRetry())
 		}
 
-		// remove disabled fields for tokens.OpenAI API
+		// remove disabled fields for OpenAI API
 		jsonData, err = relaycommon.RemoveDisabledFields(jsonData, info.ChannelOtherSettings)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())

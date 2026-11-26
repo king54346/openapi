@@ -15,7 +15,8 @@ import (
 	"openapi/model"
 	"openapi/relay/channel"
 	relaycommon "openapi/relay/common"
-	"openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
+	httpclient "openapi/service/http"
 
 	gin "github.com/king54346/gin-tiny"
 	"github.com/pkg/errors"

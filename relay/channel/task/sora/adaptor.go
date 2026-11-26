@@ -13,7 +13,8 @@ import (
 	"openapi/model"
 	"openapi/relay/channel"
 	relaycommon "openapi/relay/common"
-	"openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
+	httpclient "openapi/service/http"
 	"openapi/setting"
 
 	gin "github.com/king54346/gin-tiny"
@@ -125,7 +126,7 @@ func (a *TaskAdaptor) DoResponse(c gin.Context, resp *http.Response, _ *relaycom
 	}
 	_ = resp.Body.Close()
 
-	// cron.Parse Sora response
+	// Parse Sora response
 	var dResp responseTask
 	if err := common.Unmarshal(responseBody, &dResp); err != nil {
 		taskErr = relayerr.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)

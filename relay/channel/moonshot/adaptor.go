@@ -1,7 +1,6 @@
 package moonshot
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,12 +16,10 @@ import (
 	gin "github.com/king54346/gin-tiny"
 )
 
-type Adaptor struct {
-}
+type Adaptor struct{}
 
 func (a *Adaptor) ConvertAudioRequest(c gin.Context, info *relaycommon.RelayInfo, request dto.AudioRequest) (io.Reader, error) {
-	//TODO implement me
-	return nil, errors.New("not supported")
+	return nil, channel.ErrNotImplemented
 }
 
 func (a *Adaptor) ConvertImageRequest(c gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
@@ -30,8 +27,7 @@ func (a *Adaptor) ConvertImageRequest(c gin.Context, info *relaycommon.RelayInfo
 	return adaptor.ConvertImageRequest(c, info, request)
 }
 
-func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
-}
+func (a *Adaptor) Init(info *relaycommon.RelayInfo) {}
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	baseURL := info.ChannelBaseUrl
@@ -41,16 +37,16 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 		}
 	}
 
-	if info.RelayMode == constant.RelayModeRerank {
+	switch info.RelayMode {
+	case constant.RelayModeRerank:
 		return fmt.Sprintf("%s/v1/rerank", info.ChannelBaseUrl), nil
-	} else if info.RelayMode == constant.RelayModeEmbeddings {
+	case constant.RelayModeEmbeddings:
 		return fmt.Sprintf("%s/v1/embeddings", info.ChannelBaseUrl), nil
-	} else if info.RelayMode == constant.RelayModeChatCompletions {
-		return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
-	} else if info.RelayMode == constant.RelayModeCompletions {
+	case constant.RelayModeCompletions:
 		return fmt.Sprintf("%s/v1/completions", info.ChannelBaseUrl), nil
+	default:
+		return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
 	}
-	return fmt.Sprintf("%s/v1/chat/completions", info.ChannelBaseUrl), nil
 }
 
 func (a *Adaptor) SetupRequestHeader(c gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
@@ -63,8 +59,8 @@ func (a *Adaptor) ConvertOpenAIRequest(c gin.Context, info *relaycommon.RelayInf
 	return request, nil
 }
 
+// ConvertOpenAIResponsesRequest 返回 ErrNotImplemented，由 ResponsesHelper 自动降级走 Chat Completions 转发。
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
-	// TODO implement me
 	return nil, channel.ErrNotImplemented
 }
 
@@ -85,10 +81,5 @@ func (a *Adaptor) DoResponse(c gin.Context, resp *http.Response, info *relaycomm
 	return adaptor.DoResponse(c, resp, info)
 }
 
-func (a *Adaptor) GetModelList() []string {
-	return ModelList
-}
-
-func (a *Adaptor) GetChannelName() string {
-	return ChannelName
-}
+func (a *Adaptor) GetModelList() []string  { return ModelList }
+func (a *Adaptor) GetChannelName() string { return ChannelName }

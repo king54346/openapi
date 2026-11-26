@@ -10,7 +10,7 @@ import (
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	relayerr "openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
 	"openapi/setting"
 	"openapi/types"
 

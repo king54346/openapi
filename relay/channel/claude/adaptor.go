@@ -16,9 +16,9 @@ import (
 	gin "github.com/king54346/gin-tiny"
 )
 
-// Anthropic tokens.Claude 渠道适配器：/v1/messages 原生协议，以及与 tokens.OpenAI Chat Completions 的互转。
+// Anthropic Claude 渠道适配器：/v1/messages 原生协议，以及与 OpenAI Chat Completions 的互转。
 
-// ModelList 内置的 tokens.Claude 模型清单。
+// ModelList 内置的 Claude 模型清单。
 var ModelList = []string{
 	"claude-opus-4-1-20250805",
 	"claude-sonnet-4-5-20250929",
@@ -30,7 +30,7 @@ var ModelList = []string{
 }
 
 // ChannelName 渠道显示名。
-const ChannelName = "Anthropic tokens.Claude"
+const ChannelName = "Anthropic Claude"
 
 // defaultAnthropicVersion 未指定时使用的 API 版本。
 const defaultAnthropicVersion = "2023-06-01"
@@ -104,11 +104,11 @@ func (a *Adaptor) DoResponse(c gin.Context, resp *http.Response, info *relaycomm
 	}
 	defer resp.Body.Close()
 
-	// /v1/messages 原生请求：原样透传 tokens.Claude 协议
+	// /v1/messages 原生请求：原样透传 Claude 协议
 	if info.RelayFormat == types.RelayFormatClaude {
 		return passThroughClaude(c, resp, info)
 	}
-	// /v1/chat/completions 打到 tokens.Claude 渠道：把 tokens.Claude 响应转回 tokens.OpenAI 格式
+	// /v1/chat/completions 打到 Claude 渠道：把 Claude 响应转回 OpenAI 格式
 	return convertClaudeResponseForOpenAI(c, resp, info)
 }
 
@@ -139,7 +139,7 @@ func streamPassThrough(c gin.Context, resp *http.Response, info *relaycommon.Rel
 	return nil, nil
 }
 
-// claudeUsageToUsage tokens.Claude 用量转通用用量。
+// claudeUsageToUsage Claude 用量转通用用量。
 func claudeUsageToUsage(usage dto.ClaudeUsage) *dto.Usage {
 	out := &dto.Usage{
 		PromptTokens:     usage.InputTokens,

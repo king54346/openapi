@@ -24,7 +24,7 @@ type FormatJsonSchema struct {
 	Strict      json.RawMessage `json:"strict,omitempty"`
 }
 
-// GeneralOpenAIRequest represents a general request structure for tokens.OpenAI-compatible APIs.
+// GeneralOpenAIRequest represents a general request structure for OpenAI-compatible APIs.
 // 参数增加规范：无引用的参数必须使用json.RawMessage类型，并添加omitempty标签
 type GeneralOpenAIRequest struct {
 	Model               string            `json:"model,omitempty"`
@@ -65,14 +65,14 @@ type GeneralOpenAIRequest struct {
 	Dimensions  *int            `json:"dimensions,omitempty"`
 	Modalities  json.RawMessage `json:"modalities,omitempty"`
 	Audio       json.RawMessage `json:"audio,omitempty"`
-	// 安全标识符，用于帮助 tokens.OpenAI 检测可能违反使用政策的应用程序用户
-	// 注意：此字段会向 tokens.OpenAI 发送用户标识信息，默认过滤，可通过 allow_safety_identifier 开启
+	// 安全标识符，用于帮助 OpenAI 检测可能违反使用政策的应用程序用户
+	// 注意：此字段会向 OpenAI 发送用户标识信息，默认过滤，可通过 allow_safety_identifier 开启
 	SafetyIdentifier json.RawMessage `json:"safety_identifier,omitempty"`
 	// Whether or not to store the output of this chat completion request for use in our model distillation or evals products.
-	// 是否存储此次请求数据供 tokens.OpenAI 用于评估和优化产品
+	// 是否存储此次请求数据供 OpenAI 用于评估和优化产品
 	// 注意：默认允许透传，可通过 disable_store 禁用；禁用后可能导致 Codex 无法正常使用
 	Store json.RawMessage `json:"store,omitempty"`
-	// Used by tokens.OpenAI to cache responses for similar requests to optimize your cache hit rates. Replaces the user field
+	// Used by OpenAI to cache responses for similar requests to optimize your cache hit rates. Replaces the user field
 	PromptCacheKey       string          `json:"prompt_cache_key,omitempty"`
 	PromptCacheRetention json.RawMessage `json:"prompt_cache_retention,omitempty"`
 	LogitBias            json.RawMessage `json:"logit_bias,omitempty"`
@@ -169,7 +169,7 @@ func (r *GeneralOpenAIRequest) GetTokenCountMeta() *types.TokenCountMeta {
 				texts = append(texts, fmt.Sprintf("%v", tool.Function.Parameters))
 			}
 		}
-		//toolTokens := tokens.CountTokenInput(countStr, request.Model)
+		//toolTokens := tokensvc.CountTokenInput(countStr, request.Model)
 		//tkm += 8
 		//tkm += toolTokens
 	}
@@ -406,12 +406,20 @@ func (m *Message) SetToolCalls(toolCalls any) {
 }
 
 func (m *Message) StringContent() string {
-	switch m.Content.(type) {
+	switch v := m.Content.(type) {
 	case string:
-		return m.Content.(string)
+		return v
+	case []MediaContent:
+		var contentStr string
+		for _, item := range v {
+			if item.Type == ContentTypeText {
+				contentStr += item.Text
+			}
+		}
+		return contentStr
 	case []any:
 		var contentStr string
-		for _, contentItem := range m.Content.([]any) {
+		for _, contentItem := range v {
 			contentMap, ok := contentItem.(map[string]any)
 			if !ok {
 				continue
@@ -473,6 +481,11 @@ func (m *Message) ParseContent() []MediaContent {
 
 	// 尝试解析为数组
 	//var arrayContent []map[string]interface{}
+
+	if mediaSlice, ok := m.Content.([]MediaContent); ok {
+		m.parsedContent = mediaSlice
+		return mediaSlice
+	}
 
 	arrayContent, ok := m.Content.([]any)
 	if !ok {

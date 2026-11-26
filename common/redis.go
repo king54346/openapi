@@ -204,7 +204,7 @@ func RedisHSetObj(key string, obj interface{}, expiration time.Duration) error {
 
 	_, err := txn.Exec(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to cron.execute transaction: %w", err)
+		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
 	return nil
 }

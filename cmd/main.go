@@ -1,6 +1,7 @@
 package main
 
 import (
+	httpclient "openapi/service/http"
 	"context"
 	"crypto/rand"
 	"embed"
@@ -16,13 +17,13 @@ import (
 
 	"openapi/common"
 	"openapi/common/system"
-	"openapi/controller"
 	"openapi/database"
 	"openapi/logger"
 	"openapi/middleware"
 	"openapi/model"
 	"openapi/router"
-	"openapi/service/cron"
+	cronsvc "openapi/service/cron"
+	tasksvc "openapi/service/task"
 
 	"github.com/bytedance/gopkg/util/gopool"
 	"github.com/joho/godotenv"
@@ -168,12 +169,12 @@ func InitResources() (*gorm.DB, *gorm.DB, error) {
 	go model.SyncChannelCache(common.SyncFrequency)
 
 	// 异步任务（视频等）后台轮询；UPDATE_TASK 默认只在 master 节点开启
-	controller.StartTaskPolling()
+	tasksvc.StartTaskPolling()
 
 	// 通用定时任务（如 channel_test 定时测试渠道）；CRON_ENABLED 默认只在 master 节点开启
-	controller.RegisterCronExecutors()
+	cronsvc.RegisterCronExecutors()
 	if common.GetEnvOrDefaultBool("CRON_ENABLED", common.IsMasterNode) {
-		cron.StartScheduler()
+		cronsvc.StartScheduler()
 	} else {
 		common.SysLog("cron scheduler disabled (CRON_ENABLED=false or slave node)")
 	}

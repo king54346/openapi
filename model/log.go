@@ -84,7 +84,7 @@ func RecordErrorLog(c gin.Context, userId int, channelId int, modelName string, 
 	isStream bool, other map[string]interface{}) {
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, content))
 	username := c.GetString("username")
-	requestId := c.GetString(RequestIdKey)
+	requestId := c.GetString(common.RequestIdKey)
 	otherStr := common.MapToJsonStr(other)
 	log := &Log{
 		UserId:           userId,
@@ -131,7 +131,7 @@ func RecordConsumeLog(c gin.Context, userId int, params RecordConsumeLogParams) 
 	}
 	logger.LogInfo(c, fmt.Sprintf("record consume log: userId=%d, params=%s", userId, common.GetJsonString(params)))
 	username := c.GetString("username")
-	requestId := c.GetString(RequestIdKey)
+	requestId := c.GetString(common.RequestIdKey)
 	otherStr := common.MapToJsonStr(params.Other)
 	log := &Log{
 		UserId:           userId,
@@ -218,7 +218,7 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 		}
 		channelMap := make(map[int]string, len(channels))
 		for _, channel := range channels {
-			channelMap[Id] = channel.Name
+			channelMap[channel.Id] = channel.Name
 		}
 		for i := range logs {
 			logs[i].ChannelName = channelMap[logs[i].ChannelId]

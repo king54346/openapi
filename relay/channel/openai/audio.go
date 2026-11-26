@@ -13,7 +13,8 @@ import (
 	"openapi/logger"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	"openapi/service/tokens"
+	httpclient "openapi/service/http"
+	tokensvc "openapi/service/token"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
@@ -27,7 +28,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 	// the subsequent failure of the response body should be regarded as a non-recoverable error,
 	// and can be terminated directly.
 	defer httpclient.CloseResponseBodyGracefully(resp)
-	usage := tokens.NewUsage(info.GetEstimatePromptTokens(), 0)
+	usage := tokensvc.NewUsage(info.GetEstimatePromptTokens(), 0)
 	for k, v := range resp.Header {
 		c.Response().Header().Set(k, v[0])
 	}
@@ -51,7 +52,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 			return true
 		})
 	} else {
-		tokens.MarkUsageEstimated(c)
+		tokensvc.MarkUsageEstimated(c)
 		// 读取响应体到缓冲区
 		bodyBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -77,7 +78,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 		var durationErr error
 
 		if audioFormat == "pcm" {
-			// PCM 格式没有文件头，根据 tokens.OpenAI TTS 的 PCM 参数计算时长
+			// PCM 格式没有文件头，根据 OpenAI TTS 的 PCM 参数计算时长
 			// 采样率: 24000 Hz, 位深度: 16-bit (2 bytes), 声道数: 1
 			const sampleRate = 24000
 			const bytesPerSample = 2
@@ -99,7 +100,7 @@ func OpenaiTTSHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 			usage.CompletionTokens = estimatedTokens
 			usage.CompletionTokenDetails.AudioTokens = estimatedTokens
 		} else if duration > 0 {
-			completionTokens := tokens.AudioDurationToTokens(duration)
+			completionTokens := tokensvc.AudioDurationToTokens(duration)
 			usage.CompletionTokens = completionTokens
 			usage.CompletionTokenDetails.AudioTokens = completionTokens
 		}
@@ -135,5 +136,5 @@ func OpenaiSTTHandler(c gin.Context, resp *http.Response, info *relaycommon.Rela
 		}
 	}
 
-	return nil, tokens.NewUsage(info.GetEstimatePromptTokens(), 0)
+	return nil, tokensvc.NewUsage(info.GetEstimatePromptTokens(), 0)
 }

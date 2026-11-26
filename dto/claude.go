@@ -10,9 +10,9 @@ import (
 	gin "github.com/king54346/gin-tiny"
 )
 
-// Anthropic tokens.Claude Messages API 协议（/v1/messages）以及与 tokens.OpenAI Chat Completions 的双向转换。
+// Anthropic Claude Messages API 协议（/v1/messages）以及与 OpenAI Chat Completions 的双向转换。
 
-// ClaudeRequest tokens.Claude Messages 请求体。
+// ClaudeRequest Claude Messages 请求体。
 type ClaudeRequest struct {
 	Model         string          `json:"model"`
 	System        json.RawMessage `json:"system,omitempty"` // 字符串或内容块数组
@@ -35,7 +35,7 @@ type ClaudeMessage struct {
 	Content json.RawMessage `json:"content"`
 }
 
-// ClaudeTool tokens.Claude 工具定义（input_schema 兼容 JSON Schema）。
+// ClaudeTool Claude 工具定义（input_schema 兼容 JSON Schema）。
 type ClaudeTool struct {
 	Type        string `json:"type,omitempty"`
 	Name        string `json:"name"`
@@ -67,7 +67,7 @@ type ClaudeImageSource struct {
 	Url       string `json:"url,omitempty"`
 }
 
-// ClaudeUsage tokens.Claude 用量（含缓存读写）。
+// ClaudeUsage Claude 用量（含缓存读写）。
 type ClaudeUsage struct {
 	InputTokens              int `json:"input_tokens"`
 	OutputTokens             int `json:"output_tokens"`
@@ -75,7 +75,7 @@ type ClaudeUsage struct {
 	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
 }
 
-// ClaudeResponse tokens.Claude Messages 响应体。
+// ClaudeResponse Claude Messages 响应体。
 type ClaudeResponse struct {
 	Id           string               `json:"id"`
 	Type         string               `json:"type"`
@@ -87,7 +87,7 @@ type ClaudeResponse struct {
 	Usage        ClaudeUsage          `json:"usage"`
 }
 
-// ClaudeError tokens.Claude 错误响应体。
+// ClaudeError Claude 错误响应体。
 type ClaudeError struct {
 	Type  string            `json:"type"`
 	Error ClaudeErrorDetail `json:"error"`
@@ -99,7 +99,7 @@ type ClaudeErrorDetail struct {
 	Message string `json:"message"`
 }
 
-// ClaudeStreamEvent tokens.Claude 流式事件。
+// ClaudeStreamEvent Claude 流式事件。
 type ClaudeStreamEvent struct {
 	Type         string              `json:"type"`
 	Index        *int                `json:"index,omitempty"`
@@ -199,7 +199,7 @@ func clonePtr[T any](value *T) *T {
 	return &copied
 }
 
-// ClaudeImageToOpenAIPart 把 tokens.Claude 图片块转成 tokens.OpenAI 的 image_url 内容块。
+// ClaudeImageToOpenAIPart 把 Claude 图片块转成 OpenAI 的 image_url 内容块。
 func ClaudeImageToOpenAIPart(source *ClaudeImageSource) (MediaContent, error) {
 	if source == nil {
 		return MediaContent{}, fmt.Errorf("image block without source")
@@ -250,7 +250,7 @@ func OpenAIStopReasonToClaude(finishReason string) string {
 	}
 }
 
-// ClaudeRequestToOpenAIRequest 把 tokens.Claude Messages 请求转换成 tokens.OpenAI Chat Completions 请求。
+// ClaudeRequestToOpenAIRequest 把 Claude Messages 请求转换成 OpenAI Chat Completions 请求。
 func ClaudeRequestToOpenAIRequest(request *ClaudeRequest) (*GeneralOpenAIRequest, error) {
 	if request == nil {
 		return nil, fmt.Errorf("claude request is nil")
@@ -309,7 +309,7 @@ func ClaudeRequestToOpenAIRequest(request *ClaudeRequest) (*GeneralOpenAIRequest
 				}
 				parts = append(parts, part)
 			case "tool_result":
-				// tool_result 对应 tokens.OpenAI 的 tool 消息，需要单独成条
+				// tool_result 对应 OpenAI 的 tool 消息，需要单独成条
 				result := Message{Role: "tool", ToolCallId: block.ToolUseId, Content: block.ContentText()}
 				out.Messages = append(out.Messages, result)
 			}
@@ -421,7 +421,7 @@ func claudeToolChoiceToOpenAI(raw json.RawMessage) any {
 	return nil
 }
 
-// OpenAIResponseToClaudeResponse 把 tokens.OpenAI 非流式响应转换成 tokens.Claude 响应。
+// OpenAIResponseToClaudeResponse 把 OpenAI 非流式响应转换成 Claude 响应。
 func OpenAIResponseToClaudeResponse(response *OpenAITextResponse, id string) *ClaudeResponse {
 	out := &ClaudeResponse{
 		Id:      id,
@@ -465,7 +465,7 @@ func OpenAIResponseToClaudeResponse(response *OpenAITextResponse, id string) *Cl
 	return out
 }
 
-// NewClaudeMessageID 生成 tokens.Claude 消息 id（形如 msg_xxx）。
+// NewClaudeMessageID 生成 Claude 消息 id（形如 msg_xxx）。
 func NewClaudeMessageID(requestId string) string {
 	if requestId == "" {
 		return "msg_" + common.GetUUID()
@@ -473,7 +473,7 @@ func NewClaudeMessageID(requestId string) string {
 	return "msg_" + requestId
 }
 
-// OpenAIResponseFromClaude 把 tokens.Claude 响应转换成 tokens.OpenAI Chat Completions 响应。
+// OpenAIResponseFromClaude 把 Claude 响应转换成 OpenAI Chat Completions 响应。
 func OpenAIResponseFromClaude(response *ClaudeResponse, requestId, modelName string) *OpenAITextResponse {
 	if modelName == "" {
 		modelName = response.Model

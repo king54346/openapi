@@ -14,7 +14,7 @@ import (
 	"openapi/relay/channel/claude"
 	relaycommon "openapi/relay/common"
 	"openapi/relay/helper"
-	relayerr "openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
 	"openapi/types"
 	"strings"
 
@@ -24,7 +24,7 @@ import (
 // channelAdaptor 渠道适配器接口别名，避免与 relay 包内其它标识重名。
 type channelAdaptor = channel.Adaptor
 
-// tokens.Claude 协议转发：/v1/messages 直连 Anthropic 渠道，或跨协议转发到任意 tokens.OpenAI 兼容渠道。
+// Claude 协议转发：/v1/messages 直连 Anthropic 渠道，或跨协议转发到任意 OpenAI 兼容渠道。
 
 // ClaudeHelper 处理 RelayFormatClaude 的请求。
 func ClaudeHelper(c gin.Context, info *relaycommon.RelayInfo) (apiErr *types.StarAPIError) {
@@ -48,7 +48,7 @@ func ClaudeHelper(c gin.Context, info *relaycommon.RelayInfo) (apiErr *types.Sta
 	return claudeToOpenAIRelay(c, info, adaptor, request)
 }
 
-// claudeNativeRelay tokens.Claude 请求发往 Anthropic 渠道：请求体保持 tokens.Claude 协议。
+// claudeNativeRelay Claude 请求发往 Anthropic 渠道：请求体保持 Claude 协议。
 func claudeNativeRelay(c gin.Context, info *relaycommon.RelayInfo, adaptor channelAdaptor, request *dto.ClaudeRequest) *types.StarAPIError {
 	if err := helper.ModelMappedHelper(c, info, request); err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
@@ -89,17 +89,29 @@ func claudeNativeRelay(c gin.Context, info *relaycommon.RelayInfo, adaptor chann
 	return nil
 }
 
-// claudeToOpenAIRelay tokens.Claude 请求转成 tokens.OpenAI 请求发给 tokens.OpenAI 兼容渠道，再把响应转回 tokens.Claude 格式。
+// claudeToOpenAIRelay Claude 请求转成 OpenAI 请求发给 OpenAI 兼容渠道，再把响应转回 Claude 格式。
 func claudeToOpenAIRelay(c gin.Context, info *relaycommon.RelayInfo, adaptor channelAdaptor, request *dto.ClaudeRequest) *types.StarAPIError {
 	openaiRequest, err := dto.ClaudeRequestToOpenAIRequest(request)
 	if err != nil {
 		return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
 	}
-	// 模型映射在 tokens.Claude 请求上完成，再同步到 tokens.OpenAI 请求
+	// 模型映射在 Claude 请求上完成，再同步到 OpenAI 请求
 	if err := helper.ModelMappedHelper(c, info, request); err != nil {
 		return types.NewError(err, types.ErrorCodeChannelModelMappedError, types.ErrOptionWithSkipRetry())
 	}
 	openaiRequest.Model = request.Model
+
+	origMode := info.RelayMode
+	origFormat := info.RelayFormat
+	origPath := info.RequestURLPath
+	info.RelayMode = 1 // RelayModeChatCompletions
+	info.RelayFormat = types.RelayFormatOpenAI
+	info.RequestURLPath = "/v1/chat/completions"
+	defer func() {
+		info.RelayMode = origMode
+		info.RelayFormat = origFormat
+		info.RequestURLPath = origPath
+	}()
 
 	converted, err := adaptor.ConvertOpenAIRequest(c, info, openaiRequest)
 	if err != nil {
@@ -148,7 +160,7 @@ func recordClaudeUsage(c gin.Context, info *relaycommon.RelayInfo, usage any) {
 	recordUsage(c, info, nil, nil)
 }
 
-// writeClaudeFromOpenAI 把 tokens.OpenAI 渠道的响应转换成 tokens.Claude 协议写给客户端。
+// writeClaudeFromOpenAI 把 OpenAI 渠道的响应转换成 Claude 协议写给客户端。
 func writeClaudeFromOpenAI(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*dto.Usage, *types.StarAPIError) {
 	defer resp.Body.Close()
 
@@ -170,7 +182,7 @@ func writeClaudeFromOpenAI(c gin.Context, resp *http.Response, info *relaycommon
 	return &openaiResp.Usage, nil
 }
 
-// streamOpenAIToClaude 把 tokens.OpenAI SSE 流转换成 Anthropic 事件流。
+// streamOpenAIToClaude 把 OpenAI SSE 流转换成 Anthropic 事件流。
 func streamOpenAIToClaude(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (*dto.Usage, *types.StarAPIError) {
 	helper.SetEventStreamHeaders(c)
 

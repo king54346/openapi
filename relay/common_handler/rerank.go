@@ -7,6 +7,7 @@ import (
 	"openapi/common"
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
+	httpclient "openapi/service/http"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"

@@ -5,7 +5,7 @@ import (
 
 	"openapi/dto"
 	relaycommon "openapi/relay/common"
-	relayerr "openapi/service/relayerr"
+	relayerr "openapi/relay/relayerr"
 	"openapi/types"
 
 	"github.com/gorilla/websocket"

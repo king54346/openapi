@@ -39,10 +39,49 @@ func GetAndValidateRequest(c gin.Context, format types.RelayFormat) (request dto
 		request = &dto.BaseRequest{}
 	case types.RelayFormatClaude:
 		request, err = GetAndValidateClaudeRequest(c)
+	case types.RelayFormatGemini:
+		request, err = GetAndValidateGeminiRequest(c, relayMode)
 	default:
 		return nil, fmt.Errorf("unsupported relay format: %s", format)
 	}
 	return request, err
+}
+
+// GetAndValidateGeminiRequest 解析并校验 Google Gemini 请求（兼容原生 generateContent / embedContent 与 /v1/engines/:model/embeddings）。
+func GetAndValidateGeminiRequest(c gin.Context, relayMode int) (dto.Request, error) {
+	path := c.Request().URL.Path
+	if relayMode == relayconstant.RelayModeEmbeddings || strings.HasSuffix(path, "/embeddings") {
+		return GetAndValidateEmbeddingRequest(c, relayconstant.RelayModeEmbeddings)
+	}
+	req := &dto.GeminiChatRequest{}
+	if err := common.UnmarshalBodyReusable(c, req); err != nil {
+		return nil, err
+	}
+	model, action := parseGeminiModelAndAction(path)
+	if model != "" {
+		req.Model = model
+	}
+	req.Action = action
+	if action == "streamGenerateContent" {
+		req.Stream = true
+	}
+	if action != "embedContent" && action != "batchEmbedContents" && len(req.Contents) == 0 && req.Content == nil {
+		return nil, errors.New("contents is required")
+	}
+	return req, nil
+}
+
+func parseGeminiModelAndAction(path string) (model string, action string) {
+	const prefix = "/models/"
+	idx := strings.Index(path, prefix)
+	if idx == -1 {
+		return "", "generateContent"
+	}
+	rest := strings.TrimPrefix(path[idx+len(prefix):], "/")
+	if colon := strings.IndexByte(rest, ':'); colon >= 0 {
+		return rest[:colon], rest[colon+1:]
+	}
+	return rest, "generateContent"
 }
 
 // GetAndValidateClaudeRequest 解析并校验 Anthropic Messages 请求。

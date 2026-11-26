@@ -12,8 +12,8 @@ import (
 	openaichannel "openapi/relay/channel/openai"
 	relaycommon "openapi/relay/common"
 	relayconstant "openapi/relay/constant"
-	"openapi/service/compat"
-	relayerr "openapi/service/relayerr"
+	"openapi/relay/compat"
+	relayerr "openapi/relay/relayerr"
 	"openapi/types"
 
 	gin "github.com/king54346/gin-tiny"
