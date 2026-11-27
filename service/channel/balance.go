@@ -42,11 +42,25 @@ func queryChannelBalance(ch *model.Channel) (float64, error) {
 	var endpoint string
 	switch ch.Type {
 	case constant.ChannelTypeOpenRouter:
-		endpoint = baseURL + "/v1/credits"
+		if strings.HasSuffix(baseURL, "/v1") {
+			endpoint = baseURL + "/credits"
+		} else {
+			endpoint = baseURL + "/v1/credits"
+		}
 	case constant.ChannelTypeDeepSeek:
-		endpoint = baseURL + "/user/balance"
+		endpoint = strings.TrimSuffix(baseURL, "/v1") + "/user/balance"
 	case constant.ChannelTypeMoonshot:
-		endpoint = baseURL + "/v1/users/me/balance"
+		if strings.HasSuffix(baseURL, "/v1") {
+			endpoint = baseURL + "/users/me/balance"
+		} else {
+			endpoint = baseURL + "/v1/users/me/balance"
+		}
+	case constant.ChannelTypeSiliconFlow:
+		if strings.HasSuffix(baseURL, "/v1") {
+			endpoint = baseURL + "/user/info"
+		} else {
+			endpoint = baseURL + "/v1/user/info"
+		}
 	default:
 		return 0, BalanceQueryUnsupported{ChannelType: ch.Type}
 	}
@@ -86,6 +100,21 @@ func queryChannelBalance(ch *model.Channel) (float64, error) {
 			}
 		}
 		return 0, fmt.Errorf("no balance info in upstream response")
+	case constant.ChannelTypeSiliconFlow:
+		var resp struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+			Data    struct {
+				TotalBalance string `json:"totalBalance"`
+			} `json:"data"`
+		}
+		if err := common.Unmarshal(body, &resp); err != nil {
+			return 0, err
+		}
+		if resp.Code != 20000 {
+			return 0, fmt.Errorf("code: %d, message: %s", resp.Code, resp.Message)
+		}
+		return parseFloatString(resp.Data.TotalBalance)
 	default:
 		var resp struct {
 			Data struct {

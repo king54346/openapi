@@ -11,7 +11,6 @@ var legacyConsoleOptions = map[string]string{
 	"console_setting.api_info":       "ApiInfo",
 	"console_setting.faq":            "FAQ",
 	"console_setting.announcements":  "Announcements",
-	"console_setting.uptime_kuma":    "UptimeKumaUrl",
 	"console_setting.allow_redirect": "AllowRedirect",
 }
 

@@ -11,6 +11,9 @@ const (
 	APITypeVolcEngine
 	APITypeAnthropic
 	APITypeGemini
+	APITypeZhipu
+	APITypeZhipuV4
+	APITypeSiliconFlow
 	APITypeDummy // 仅用于计数，不要在其后添加
 )
 
@@ -35,6 +38,12 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		return APITypeAnthropic, true
 	case ChannelTypeGemini:
 		return APITypeGemini, true
+	case ChannelTypeZhipu:
+		return APITypeZhipu, true
+	case ChannelTypeZhipu_v4:
+		return APITypeZhipuV4, true
+	case ChannelTypeSiliconFlow:
+		return APITypeSiliconFlow, true
 	}
 	return -1, false
 }

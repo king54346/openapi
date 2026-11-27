@@ -108,7 +108,4 @@ func TestStatusSelfCheck(t *testing.T) {
 	if result["success"] != true {
 		t.Fatalf("self check should pass: %v", result)
 	}
-	if uptime := testhelper.Decode[map[string]any](t, s.OK(testhelper.Actor{}, http.MethodGet, "/api/uptime/status", nil)); len(uptime) != 0 {
-		t.Fatalf("uptime status should be empty when disabled: %v", uptime)
-	}
 }

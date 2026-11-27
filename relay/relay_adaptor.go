@@ -15,11 +15,14 @@ import (
 	"openapi/relay/channel/minimax"
 	"openapi/relay/channel/moonshot"
 	"openapi/relay/channel/openai"
+	"openapi/relay/channel/siliconflow"
 	taskali "openapi/relay/channel/task/ali"
 	taskdoubao "openapi/relay/channel/task/doubao"
 	"openapi/relay/channel/task/hailuo"
 	tasksora "openapi/relay/channel/task/sora"
 	"openapi/relay/channel/volcengine"
+	"openapi/relay/channel/zhipu"
+	"openapi/relay/channel/zhipu_4v"
 	relaycommon "openapi/relay/common"
 	"openapi/types"
 
@@ -46,6 +49,12 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &claude.Adaptor{}
 	case constant.APITypeGemini:
 		return &gemini.Adaptor{}
+	case constant.APITypeZhipu:
+		return &zhipu.Adaptor{}
+	case constant.APITypeZhipuV4:
+		return &zhipu_4v.Adaptor{}
+	case constant.APITypeSiliconFlow:
+		return &siliconflow.Adaptor{}
 	}
 	return nil
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"embed"
 	"fmt"
 	"log"
 	"net"
@@ -18,6 +17,7 @@ import (
 	"openapi/common"
 	"openapi/common/system"
 	"openapi/database"
+	"openapi/frontend"
 	"openapi/logger"
 	"openapi/middleware"
 	"openapi/model"
@@ -30,13 +30,6 @@ import (
 	gin "github.com/king54346/gin-tiny"
 	"github.com/king54346/gin-tiny/middleware/sessions"
 	"gorm.io/gorm"
-)
-
-// 暂无内置前端：buildFS 为空、indexPage 为 nil 时，
-// 未匹配的 API 路径返回 JSON 404；也可通过 FRONTEND_BASE_URL 重定向到外部前端。
-var (
-	buildFS   embed.FS
-	indexPage []byte
 )
 
 func main() {
@@ -109,7 +102,7 @@ func newServer() *gin.Engine {
 	// 管理接口鉴权（UserAuth/AdminAuth）依赖 session，必须注册
 	server.Use(sessions.Sessions("session", newSessionStore()))
 
-	router.SetRouter(server, buildFS, indexPage)
+	router.SetRouter(server, frontend.BuildFS, frontend.IndexPage())
 	return server
 }
 

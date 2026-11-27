@@ -106,7 +106,7 @@ func (a *Adaptor) DoResponse(c gin.Context, resp *http.Response, info *relaycomm
 
 	// /v1/messages 原生请求：原样透传 Claude 协议
 	if info.RelayFormat == types.RelayFormatClaude {
-		return passThroughClaude(c, resp, info)
+		return PassThroughClaude(c, resp, info)
 	}
 	// /v1/chat/completions 打到 Claude 渠道：把 Claude 响应转回 OpenAI 格式
 	return convertClaudeResponseForOpenAI(c, resp, info)
@@ -116,8 +116,8 @@ func (a *Adaptor) GetModelList() []string { return ModelList }
 
 func (a *Adaptor) GetChannelName() string { return ChannelName }
 
-// passThroughClaude 原生透传：非流式解析 usage，流式按原始字节转发（保留 event: 行）。
-func passThroughClaude(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (any, *types.StarAPIError) {
+// PassThroughClaude 原生透传：非流式解析 usage，流式按原始字节转发（保留 event: 行）。
+func PassThroughClaude(c gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (any, *types.StarAPIError) {
 	if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
 		return streamPassThrough(c, resp, info)
 	}

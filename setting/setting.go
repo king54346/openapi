@@ -65,7 +65,6 @@ type GlobalSettings struct {
 	HomePageContent string `json:"home_page_content"`
 	UserAgreement   string `json:"user_agreement"`
 	PrivacyPolicy   string `json:"privacy_policy"`
-	DocsLink        string `json:"docs_link"`
 
 	// TurnstileCheckEnabled 开启后人机验证相关接口需要携带 Cloudflare Turnstile 令牌
 	TurnstileCheckEnabled bool   `json:"turnstile_check_enabled"`
@@ -76,11 +75,6 @@ type GlobalSettings struct {
 	ChannelAffinityEnabled    bool `json:"channel_affinity_enabled"`
 	ChannelAffinityTTLSeconds int  `json:"channel_affinity_ttl_seconds"`
 	ChannelAffinityMaxEntries int  `json:"channel_affinity_max_entries"`
-
-	// Uptime Kuma 状态页代理
-	UptimeKumaStatusEnabled bool   `json:"uptime_kuma_status_enabled"`
-	UptimeKumaUrl           string `json:"uptime_kuma_url"`
-	UptimeKumaSlug          string `json:"uptime_kuma_slug"`
 }
 
 var (
@@ -158,7 +152,6 @@ func ApplyOptions(values map[string]string) []error {
 	set("HomePageContent", func(v string) error { globalSettings.HomePageContent = v; return nil })
 	set("UserAgreement", func(v string) error { globalSettings.UserAgreement = v; return nil })
 	set("PrivacyPolicy", func(v string) error { globalSettings.PrivacyPolicy = v; return nil })
-	set("general_setting.docs_link", func(v string) error { globalSettings.DocsLink = v; return nil })
 	set("ServerAddress", func(v string) error {
 		if v = strings.TrimSpace(v); v != "" {
 			globalSettings.ServerAddress = v
@@ -188,11 +181,6 @@ func ApplyOptions(values map[string]string) []error {
 	set("ChannelAffinityMaxEntries", func(v string) error {
 		return applyInt(v, &globalSettings.ChannelAffinityMaxEntries)
 	})
-	set("UptimeKumaStatusEnabled", func(v string) error {
-		return applyBool(v, &globalSettings.UptimeKumaStatusEnabled)
-	})
-	set("UptimeKumaUrl", func(v string) error { globalSettings.UptimeKumaUrl = v; return nil })
-	set("UptimeKumaSlug", func(v string) error { globalSettings.UptimeKumaSlug = v; return nil })
 	set("ModelRequestRateLimitEnabled", func(v string) error {
 		return applyBool(v, &globalSettings.ModelRequestRateLimitEnabled)
 	})

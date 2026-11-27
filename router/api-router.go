@@ -37,7 +37,6 @@ func SetApiRouter(router *GinTiny.Engine) {
 		apiRouter.GET("/setup", systemctrl.GetSetup)
 		apiRouter.POST("/setup", systemctrl.PostSetup)
 		apiRouter.GET("/status", systemctrl.GetStatus)
-		apiRouter.GET("/uptime/status", systemctrl.GetUptimeKumaStatus)
 		apiRouter.GET("/models", middleware.UserAuth(), metactrl.DashboardListModels)
 		apiRouter.GET("/status/test", middleware.AdminAuth(), systemctrl.TestStatus)
 

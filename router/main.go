@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -66,10 +67,9 @@ func setupFrontend(router *gin.Engine, buildFS embed.FS, indexPage []byte) {
 //   - 其他未匹配的非 API 路径回退到 indexPage（SPA 前端路由）
 //   - 未匹配的 API 路径返回 JSON 404，避免把 HTML 当接口数据返回
 func SetWebRouter(router *gin.Engine, buildFS embed.FS, indexPage []byte) {
-	if webFS, err := resolveWebFS(buildFS); err != nil {
+	webFS, err := resolveWebFS(buildFS)
+	if err != nil {
 		common.SysLog(fmt.Sprintf("embedded frontend not found: %v", err))
-	} else {
-		router.StaticFS("/", http.FS(webFS))
 	}
 
 	if len(indexPage) > 0 {
@@ -79,12 +79,29 @@ func SetWebRouter(router *gin.Engine, buildFS embed.FS, indexPage []byte) {
 	}
 
 	router.NoRoute(func(c gin.Context) {
-		if isAPIPath(c.Request().URL.Path) {
+		reqPath := c.Request().URL.Path
+		if isAPIPath(reqPath) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "not_found",
-				"message": "route not found: " + c.Request().URL.Path,
+				"message": "route not found: " + reqPath,
 			})
 			return
+		}
+		if webFS != nil && (c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead) {
+			cleanName := strings.TrimPrefix(path.Clean("/"+reqPath), "/")
+			if cleanName != "" && cleanName != "." && hasFSFile(webFS, cleanName) {
+				if data, readErr := fs.ReadFile(webFS, cleanName); readErr == nil {
+					if strings.HasPrefix(cleanName, "assets/") {
+						c.Header("Cache-Control", "public, max-age=31536000, immutable")
+					}
+					contentType := mime.TypeByExtension(path.Ext(cleanName))
+					if contentType == "" {
+						contentType = http.DetectContentType(data)
+					}
+					c.Data(http.StatusOK, contentType, data)
+					return
+				}
+			}
 		}
 		if len(indexPage) > 0 {
 			serveIndexPage(c, indexPage)
@@ -95,6 +112,16 @@ func SetWebRouter(router *gin.Engine, buildFS embed.FS, indexPage []byte) {
 			"message": "page not found",
 		})
 	})
+}
+
+func hasFSFile(targetFS fs.FS, name string) bool {
+	f, err := targetFS.Open(name)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	return err == nil && !info.IsDir()
 }
 
 // resolveWebFS 在 buildFS 中定位前端产物根目录，兼容多种嵌入布局

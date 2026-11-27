@@ -158,7 +158,7 @@ func ResetGlobalSettings(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() {
 		setting.UpdateGlobalSettings(func(s *setting.GlobalSettings) {
-			s.Notice, s.About, s.HomePageContent, s.UserAgreement, s.PrivacyPolicy, s.DocsLink = "", "", "", "", "", ""
+			s.Notice, s.About, s.HomePageContent, s.UserAgreement, s.PrivacyPolicy = "", "", "", "", ""
 			s.TurnstileCheckEnabled, s.TurnstileSiteKey, s.TurnstileSecretKey = false, "", ""
 		})
 	})

@@ -15,15 +15,12 @@ func restoreSettings(t *testing.T) {
 		globalSettings.HomePageContent = ""
 		globalSettings.UserAgreement = ""
 		globalSettings.PrivacyPolicy = ""
-		globalSettings.DocsLink = ""
 		globalSettings.TurnstileCheckEnabled = false
 		globalSettings.TurnstileSiteKey = ""
 		globalSettings.TurnstileSecretKey = ""
 		globalSettings.ChannelAffinityEnabled = false
 		globalSettings.ChannelAffinityTTLSeconds = 300
 		globalSettings.ChannelAffinityMaxEntries = 100000
-		globalSettings.UptimeKumaStatusEnabled = false
-		globalSettings.UptimeKumaUrl = ""
 	})
 }
 
@@ -32,7 +29,6 @@ func TestApplyOptions(t *testing.T) {
 
 	errs := ApplyOptions(map[string]string{
 		"Notice":                    "系统公告",
-		"general_setting.docs_link": "https://example.com/docs",
 		"TurnstileCheckEnabled":     "true",
 		"TurnstileSiteKey":          "site-key",
 		"TurnstileSecretKey":        "secret-key",
@@ -45,7 +41,7 @@ func TestApplyOptions(t *testing.T) {
 	}
 
 	settings := GetGlobalSettings()
-	if settings.Notice != "系统公告" || settings.DocsLink != "https://example.com/docs" {
+	if settings.Notice != "系统公告" {
 		t.Fatalf("string options not applied: %+v", settings)
 	}
 	if !settings.TurnstileCheckEnabled || settings.TurnstileSiteKey != "site-key" || settings.TurnstileSecretKey != "secret-key" {

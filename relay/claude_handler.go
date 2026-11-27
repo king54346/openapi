@@ -42,7 +42,8 @@ func ClaudeHelper(c gin.Context, info *relaycommon.RelayInfo) (apiErr *types.Sta
 	}
 	adaptor.Init(info)
 
-	if info.ApiType == constant.APITypeAnthropic {
+	switch info.ApiType {
+	case constant.APITypeAnthropic, constant.APITypeMoonshot, constant.APITypeZhipuV4:
 		return claudeNativeRelay(c, info, adaptor, request)
 	}
 	return claudeToOpenAIRelay(c, info, adaptor, request)

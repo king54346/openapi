@@ -224,10 +224,13 @@ func (info *RelayInfo) ToString() string {
 
 // 定义支持流式选项的通道类型
 var streamSupportedChannels = map[int]bool{
-	constant.ChannelTypeOpenAI:     true,
-	constant.ChannelTypeVolcEngine: true,
-	constant.ChannelTypeDeepSeek:   true,
-	constant.ChannelTypeAli:        true,
+	constant.ChannelTypeOpenAI:      true,
+	constant.ChannelTypeVolcEngine:  true,
+	constant.ChannelTypeDeepSeek:    true,
+	constant.ChannelTypeAli:         true,
+	constant.ChannelTypeZhipu_v4:    true,
+	constant.ChannelTypeSiliconFlow: true,
+	constant.ChannelTypeMoonshot:    true,
 }
 
 func GenRelayInfoWs(c gin.Context, ws *websocket.Conn) *RelayInfo {

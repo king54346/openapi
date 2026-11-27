@@ -11,6 +11,7 @@ import (
 	"openapi/common"
 	"openapi/constant"
 	"openapi/model"
+	"openapi/relay/channel/zhipu"
 	httpclient "openapi/service/http"
 )
 
@@ -21,16 +22,27 @@ const (
 
 func upstreamModelsURL(channelType int, baseURL string) string {
 	baseURL = strings.TrimRight(baseURL, "/")
-	if channelType == constant.ChannelTypeAli {
+	if plan, ok := constant.ChannelSpecialBases[baseURL]; ok && plan.OpenAIBaseURL != "" {
+		openAIBase := strings.TrimRight(plan.OpenAIBaseURL, "/")
+		return openAIBase + "/models"
+	}
+	switch channelType {
+	case constant.ChannelTypeAli:
 		if strings.HasSuffix(baseURL, "/compatible-mode/v1") {
 			return baseURL + "/models"
 		}
 		return baseURL + "/compatible-mode/v1/models"
+	case constant.ChannelTypeZhipu_v4:
+		if strings.HasSuffix(baseURL, "/api/paas/v4") {
+			return baseURL + "/models"
+		}
+		return baseURL + "/api/paas/v4/models"
+	default:
+		if strings.HasSuffix(baseURL, "/v1") {
+			return baseURL + "/models"
+		}
+		return baseURL + "/v1/models"
 	}
-	if strings.HasSuffix(baseURL, "/v1") {
-		return baseURL + "/models"
-	}
-	return baseURL + "/v1/models"
 }
 
 func truncateStr(s string, n int) string {
@@ -91,6 +103,9 @@ func FetchUpstreamModels(id int) ([]string, error) {
 	if err != nil {
 		return nil, ErrChannelNotFound
 	}
+	if ch.Type == constant.ChannelTypeZhipu {
+		return append([]string(nil), zhipu.ModelList...), nil
+	}
 	key, _, apiErr := ch.GetNextEnabledKey()
 	if apiErr != nil {
 		return nil, validationErr("no available key: " + apiErr.Error())
@@ -110,6 +125,9 @@ type FetchModelsInput struct {
 }
 
 func FetchModels(req FetchModelsInput) ([]string, error) {
+	if req.Type == constant.ChannelTypeZhipu {
+		return append([]string(nil), zhipu.ModelList...), nil
+	}
 	baseURL := req.BaseURL
 	if baseURL == "" {
 		baseURL = constant.ChannelBaseURLs[req.Type]

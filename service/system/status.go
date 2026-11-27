@@ -31,7 +31,6 @@ func GetPublicStatus() map[string]any {
 		"start_time":            common.StartTime,
 		"setup":                 initialized,
 		"server_address":        settings.ServerAddress,
-		"docs_link":             settings.DocsLink,
 		"turnstile_check":       settings.TurnstileCheckEnabled,
 		"turnstile_site_key":    siteKey,
 		"channel_affinity":      settings.ChannelAffinityEnabled,
@@ -44,7 +43,6 @@ func GetPublicStatus() map[string]any {
 		"self_use_mode_enabled": false,
 		"demo_site_enabled":     false,
 		"enable_batch_update":   common.BatchUpdateEnabled,
-		"uptime_kuma_enabled":   settings.UptimeKumaStatusEnabled,
 	}
 }
 

@@ -10,7 +10,6 @@ import (
 //   - GET  /api/setup
 //   - POST /api/setup（已初始化时拒绝重复初始化）
 //   - GET  /api/status
-//   - GET  /api/uptime/status
 //   - GET  /api/status/test
 //   - GET  /api/notice
 //   - GET  /api/about
@@ -35,12 +34,6 @@ func TestSystemPublicAndStatusAPIs(t *testing.T) {
 	statusData := mustDecode[map[string]any](t, anon.MustOK(http.MethodGet, "/api/status", nil))
 	if statusData["setup"] != true {
 		t.Fatalf("expected status.setup=true, got %v", statusData)
-	}
-
-	// Uptime Kuma 状态接口（未开启时返回空对象，开启时返回监控 JSON）
-	code, _, raw := anon.RawDo(http.MethodGet, "/api/uptime/status", nil, nil)
-	if code != http.StatusOK {
-		t.Fatalf("GET /api/uptime/status: HTTP %d %s", code, string(raw))
 	}
 
 	// 公开文案接口
