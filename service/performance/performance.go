@@ -12,11 +12,14 @@ import (
 const diskCacheInactiveAge = 10 * time.Minute
 
 type PerformanceStats struct {
-	CacheStats    system.DiskCacheStats `json:"cache_stats"`
-	MemoryStats   MemoryStats           `json:"memory_stats"`
-	DiskCacheInfo DiskCacheInfo         `json:"disk_cache_info"`
-	DiskSpaceInfo system.DiskSpaceInfo  `json:"disk_space_info"`
-	Config        PerformanceConfig     `json:"config"`
+	CacheStats     system.DiskCacheStats `json:"cache_stats"`
+	MemoryStats    MemoryStats           `json:"memory_stats"`
+	DiskCacheInfo  DiskCacheInfo         `json:"disk_cache_info"`
+	DiskSpaceInfo  system.DiskSpaceInfo  `json:"disk_space_info"`
+	Config         PerformanceConfig     `json:"config"`
+	AdmissionStats system.AdmissionStats `json:"admission_stats"`
+	SystemStatus   system.SystemStatus   `json:"system_status"`
+	SSRFConfig     common.SSRFConfig     `json:"ssrf_config"`
 }
 
 type MemoryStats struct {
@@ -50,6 +53,7 @@ func GetStats() PerformanceStats {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
+	system.RefreshSystemStatus()
 	diskConfig := system.GetDiskCacheConfig()
 	monitorConfig := common.GetPerformanceMonitorConfig()
 
@@ -75,15 +79,21 @@ func GetStats() PerformanceStats {
 			MonitorMemoryThreshold: monitorConfig.MemoryThreshold,
 			MonitorDiskThreshold:   monitorConfig.DiskThreshold,
 		},
+		AdmissionStats: system.GetAdmissionStats(),
+		SystemStatus:   system.GetSystemStatus(),
+		SSRFConfig:     common.GetSSRFConfig(),
 	}
 }
 
 func ClearDiskCache() error {
-	return system.CleanupOldDiskCacheFiles(diskCacheInactiveAge)
+	err := system.CleanupOldDiskCacheFiles(diskCacheInactiveAge)
+	system.SyncDiskCacheStats()
+	return err
 }
 
 func ResetStats() {
 	system.ResetDiskCacheStats()
+	system.ResetAdmissionStats()
 }
 
 func ForceGC() {

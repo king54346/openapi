@@ -23,6 +23,9 @@ type HasImage interface {
 }
 
 func GetFullRequestURL(baseURL string, requestURL string, channelType int) string {
+	if strings.HasSuffix(baseURL, "#") {
+		return strings.TrimSuffix(baseURL, "#")
+	}
 	baseURL = strings.TrimRight(baseURL, "/")
 	if strings.HasPrefix(requestURL, "/v1beta/openai/") {
 		requestURL = "/v1/" + strings.TrimPrefix(requestURL, "/v1beta/openai/")

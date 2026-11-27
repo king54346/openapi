@@ -84,26 +84,38 @@ export interface TokenAccessTemplate {
   updated_time?: number
 }
 
+export interface TokenModelStat {
+  model_name: string
+  call_count: number
+  calls?: number
+  quota: number
+  prompt_tokens: number
+  completion_tokens: number
+}
+
+export interface TokenDailyStat {
+  date: string
+  call_count: number
+  calls?: number
+  quota: number
+  prompt_tokens: number
+  completion_tokens: number
+}
+
 export interface TokenAnalytics {
+  token_id?: number
+  token_name?: string
+  range_days?: number
   summary: {
     total_calls: number
     total_quota: number
-    prompt_tokens: number
-    completion_tokens: number
+    total_prompt_tokens?: number
+    total_completion_tokens?: number
+    prompt_tokens?: number
+    completion_tokens?: number
   }
-  model_stats: Array<{
-    model_name: string
-    calls: number
-    quota: number
-    prompt_tokens: number
-    completion_tokens: number
-  }>
-  daily_stats?: Array<{
-    date: string
-    calls: number
-    quota: number
-    tokens: number
-  }>
+  model_stats: TokenModelStat[]
+  daily_stats?: TokenDailyStat[]
 }
 
 export interface ChannelInfo {
@@ -331,12 +343,73 @@ export interface SyncPreviewResponse {
 }
 
 export interface PerformanceStats {
-  cache_stats?: Record<string, unknown>
-  memory_stats?: Record<string, unknown>
-  disk_cache_info?: Record<string, unknown>
-  disk_space_info?: Record<string, unknown>
-  config?: Record<string, unknown>
-  request_stats?: Record<string, unknown>
-  system_stats?: Record<string, unknown>
-  [key: string]: unknown
+  cache_stats?: {
+    active_disk_files: number
+    current_disk_usage_bytes: number
+    active_memory_buffers: number
+    current_memory_usage_bytes: number
+    disk_cache_hits: number
+    memory_cache_hits: number
+    disk_cache_max_bytes: number
+    disk_cache_threshold_bytes: number
+  }
+  memory_stats?: {
+    alloc: number
+    total_alloc: number
+    sys: number
+    num_gc: number
+    num_goroutine: number
+  }
+  disk_cache_info?: {
+    path: string
+    exists: boolean
+    file_count: number
+    total_size: number
+  }
+  disk_space_info?: {
+    total: number
+    free: number
+    used: number
+    used_percent: number
+  }
+  config?: {
+    disk_cache_path: string
+    disk_cache_threshold_mb: number
+    disk_cache_max_size_mb: number
+    monitor_cpu_threshold: number
+    monitor_memory_threshold: number
+    monitor_disk_threshold: number
+    disk_cache_enabled: boolean
+    is_running_in_container: boolean
+    monitor_enabled: boolean
+  }
+  admission_stats?: {
+    enabled: boolean
+    in_flight: number
+    soft_limit: number
+    hard_limit: number
+    max_queue_size: number
+    max_wait_ms: number
+    priority_whitelist: string
+    queued: number
+    total_admitted: number
+    total_queued: number
+    total_rejected: number
+    total_timeout: number
+  }
+  system_status?: {
+    cpu_usage: number
+    memory_usage: number
+    disk_usage: number
+  }
+  ssrf_config?: {
+    enabled: boolean
+    allow_private_ip: boolean
+    apply_ip_filter_for_domain: boolean
+    domain_filter_mode: boolean
+    ip_filter_mode: boolean
+    domain_list: string[]
+    ip_list: string[]
+    allowed_ports: string[]
+  }
 }

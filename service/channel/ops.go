@@ -53,6 +53,9 @@ func truncateStr(s string, n int) string {
 }
 
 func fetchUpstreamModelIDs(url, key, proxy string, headerOverride map[string]any) ([]string, error) {
+	if err := common.ValidateOutboundURL(url); err != nil {
+		return nil, fmt.Errorf("blocked by SSRF protection: %w", err)
+	}
 	client, err := httpclient.GetHttpClientWithProxy(proxy)
 	if err != nil {
 		return nil, fmt.Errorf("create http client: %w", err)

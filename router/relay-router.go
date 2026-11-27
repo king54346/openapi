@@ -56,7 +56,7 @@ func SetRelayRouter(router *gin.Engine) {
 	}
 
 	geminiRelayRouter := router.Group("/v1beta")
-	geminiRelayRouter.Use(middleware.SystemPerformanceCheck(), middleware.TokenAuth(), middleware.ModelRequestRateLimit(), middleware.Distribute())
+	geminiRelayRouter.Use(middleware.SystemPerformanceCheck(), middleware.TokenAuth(), middleware.AdmissionControl(), middleware.ModelRequestRateLimit(), middleware.Distribute())
 	{
 		geminiRelayRouter.POST("/models/*path", func(c gin.Context) {
 			relayctrl.Relay(c, types.RelayFormatGemini)
@@ -72,7 +72,7 @@ func SetRelayRouter(router *gin.Engine) {
 		})
 	}
 	geminiCompatibleRelayRouter := router.Group("/v1beta/openai")
-	geminiCompatibleRelayRouter.Use(middleware.SystemPerformanceCheck(), middleware.TokenAuth(), middleware.ModelRequestRateLimit(), middleware.Distribute())
+	geminiCompatibleRelayRouter.Use(middleware.SystemPerformanceCheck(), middleware.TokenAuth(), middleware.AdmissionControl(), middleware.ModelRequestRateLimit(), middleware.Distribute())
 	{
 		geminiCompatibleRelayRouter.POST("/chat/completions", func(c gin.Context) {
 			relayctrl.Relay(c, types.RelayFormatOpenAI)
@@ -85,7 +85,7 @@ func SetRelayRouter(router *gin.Engine) {
 	// ==================== Playground 路由 ====================
 	playgroundRouter := router.Group("/pg")
 	playgroundRouter.Use(middleware.SystemPerformanceCheck())
-	playgroundRouter.Use(middleware.UserAuth(), middleware.Distribute())
+	playgroundRouter.Use(middleware.UserAuth(), middleware.AdmissionControl(), middleware.Distribute())
 	{
 		playgroundRouter.POST("/chat/completions", pgctrl.Playground)
 		playgroundRouter.POST("/images/generations", pgctrl.PlaygroundImage)
@@ -101,6 +101,7 @@ func SetRelayRouter(router *gin.Engine) {
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.SystemPerformanceCheck())
 	relayV1Router.Use(middleware.TokenAuth())
+	relayV1Router.Use(middleware.AdmissionControl())
 	relayV1Router.Use(middleware.ModelRequestRateLimit())
 	{
 		wsRouter := relayV1Router.Group("")

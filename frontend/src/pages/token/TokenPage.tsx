@@ -4,7 +4,6 @@ import {
   Card,
   Col,
   DatePicker,
-  Drawer,
   Form,
   Input,
   InputNumber,
@@ -14,7 +13,6 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Switch,
   Table,
   Tag,
@@ -34,8 +32,9 @@ import {
   Trash2,
 } from 'lucide-react'
 import { api } from '../../api/client'
+import { TokenAnalyticsModal } from '../../components/TokenAnalyticsModal'
 import { formatUnixTime } from '../../constants/channel'
-import type { PageData, Token, TokenAccessTemplate, TokenAnalytics } from '../../types/api'
+import type { PageData, Token, TokenAccessTemplate } from '../../types/api'
 
 export const TokenPage: React.FC = () => {
   const { message } = App.useApp()
@@ -62,11 +61,9 @@ export const TokenPage: React.FC = () => {
   const [tplForm] = Form.useForm()
   const [editingTpl, setEditingTpl] = useState<TokenAccessTemplate | null>(null)
 
-  // 用量分析抽屉
+  // 用量分析弹窗
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
   const [analyticsToken, setAnalyticsToken] = useState<Token | null>(null)
-  const [analyticsData, setAnalyticsData] = useState<TokenAnalytics | null>(null)
-  const [analyticsLoading, setAnalyticsLoading] = useState(false)
 
   const loadTokens = useCallback(async () => {
     setLoading(true)
@@ -236,18 +233,9 @@ export const TokenPage: React.FC = () => {
     }
   }
 
-  const openAnalytics = async (record: Token) => {
+  const openAnalytics = (record: Token) => {
     setAnalyticsToken(record)
     setAnalyticsOpen(true)
-    setAnalyticsLoading(true)
-    try {
-      const res = await api.get<TokenAnalytics>(`/api/token/analytics/${record.id}`, { days: 7 })
-      setAnalyticsData(res)
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : '加载令牌统计失败')
-    } finally {
-      setAnalyticsLoading(false)
-    }
   }
 
   const handleSaveTemplate = async () => {
@@ -681,57 +669,12 @@ export const TokenPage: React.FC = () => {
         />
       </Modal>
 
-      {/* 单令牌统计抽屉 */}
-      <Drawer
-        title={`令牌用量分析：${analyticsToken?.name || ''}`}
-        width={560}
+      {/* 单令牌调用分析弹窗 */}
+      <TokenAnalyticsModal
         open={analyticsOpen}
+        token={analyticsToken}
         onClose={() => setAnalyticsOpen(false)}
-      >
-        {analyticsLoading ? (
-          <Typography.Text type="secondary">正在统计近 7 天调用记录...</Typography.Text>
-        ) : analyticsData ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <Row gutter={[12, 12]}>
-              <Col span={12}>
-                <Card size="small">
-                  <Statistic title="近 7 天调用次数" value={analyticsData.summary?.total_calls ?? 0} />
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card size="small">
-                  <Statistic title="近 7 天消耗 Quota" value={analyticsData.summary?.total_quota ?? 0} />
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card size="small">
-                  <Statistic title="输入 Prompt Tokens" value={analyticsData.summary?.prompt_tokens ?? 0} />
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card size="small">
-                  <Statistic title="输出 Completion Tokens" value={analyticsData.summary?.completion_tokens ?? 0} />
-                </Card>
-              </Col>
-            </Row>
-
-            <Card size="small" title="按模型拆分统计">
-              <Table
-                size="small"
-                rowKey="model_name"
-                pagination={false}
-                dataSource={analyticsData.model_stats || []}
-                columns={[
-                  { title: '模型名称', dataIndex: 'model_name' },
-                  { title: '调用数', dataIndex: 'calls', width: 85 },
-                  { title: 'Prompt', dataIndex: 'prompt_tokens', width: 95 },
-                  { title: 'Completion', dataIndex: 'completion_tokens', width: 105 },
-                ]}
-              />
-            </Card>
-          </div>
-        ) : null}
-      </Drawer>
+      />
     </div>
   )
 }

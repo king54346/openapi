@@ -9,6 +9,7 @@ export interface ChannelTypeOption {
 
 export const CHANNEL_TYPES: ChannelTypeOption[] = [
   { value: 1, label: 'OpenAI / 兼容接口', color: 'green', defaultBaseURL: 'https://api.openai.com' },
+  { value: 8, label: '自定义渠道 (Custom)', color: 'teal', defaultBaseURL: '' },
   { value: 14, label: 'Anthropic Claude', color: 'orange', defaultBaseURL: 'https://api.anthropic.com' },
   { value: 24, label: 'Google Gemini', color: 'blue', defaultBaseURL: 'https://generativelanguage.googleapis.com' },
   { value: 43, label: 'DeepSeek', color: 'geekblue', defaultBaseURL: 'https://api.deepseek.com' },

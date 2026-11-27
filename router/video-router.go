@@ -11,7 +11,7 @@ import (
 // SetVideoRouter 设置视频生成相关的路由
 func SetVideoRouter(router *gin.Engine) {
 	videoV1Router := router.Group("/v1")
-	videoV1Router.Use(middleware.TokenAuth(), middleware.Distribute())
+	videoV1Router.Use(middleware.SystemPerformanceCheck(), middleware.TokenAuth(), middleware.AdmissionControl(), middleware.Distribute())
 	{
 		videoV1Router.GET("/videos/:task_id/content", taskctrl.VideoProxy)
 		videoV1Router.POST("/video/generations", relayctrl.RelayTask)

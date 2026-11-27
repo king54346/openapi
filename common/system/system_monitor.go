@@ -25,9 +25,9 @@ type DiskSpaceInfo struct {
 
 // SystemStatus 系统状态信息
 type SystemStatus struct {
-	CPUUsage    float64
-	MemoryUsage float64
-	DiskUsage   float64
+	CPUUsage    float64 `json:"cpu_usage"`
+	MemoryUsage float64 `json:"memory_usage"`
+	DiskUsage   float64 `json:"disk_usage"`
 }
 
 var (
@@ -82,6 +82,11 @@ func updateSystemStatus() {
 	}
 
 	latestSystemStatus.Store(status)
+}
+
+// RefreshSystemStatus 立即刷新一次系统资源快照
+func RefreshSystemStatus() {
+	updateSystemStatus()
 }
 
 // GetSystemStatus 获取当前系统状态

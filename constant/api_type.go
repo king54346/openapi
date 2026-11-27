@@ -3,24 +3,47 @@ package constant
 // APIType 决定使用哪个 Adaptor，只在进程内使用，不持久化
 const (
 	APITypeOpenAI = iota
-	APITypeAli
-	APITypeOpenRouter
-	APITypeMoonshot
-	APITypeMiniMax
-	APITypeDeepSeek
-	APITypeVolcEngine
 	APITypeAnthropic
-	APITypeGemini
+	APITypePaLM
+	APITypeBaidu
 	APITypeZhipu
+	APITypeAli
+	APITypeXunfei
+	APITypeAIProxyLibrary
+	APITypeTencent
+	APITypeGemini
 	APITypeZhipuV4
+	APITypeOllama
+	APITypePerplexity
+	APITypeAws
+	APITypeCohere
+	APITypeDify
+	APITypeJina
+	APITypeCloudflare
 	APITypeSiliconFlow
-	APITypeDummy // 仅用于计数，不要在其后添加
+	APITypeVertexAi
+	APITypeMistral
+	APITypeDeepSeek
+	APITypeMokaAI
+	APITypeVolcEngine
+	APITypeBaiduV2
+	APITypeOpenRouter
+	APITypeXinference
+	APITypeXai
+	APITypeCoze
+	APITypeJimeng
+	APITypeMoonshot
+	APITypeSubmodel
+	APITypeMiniMax
+	APITypeReplicate
+	APITypeCodex
+	APITypeDummy
 )
 
 // ChannelType2APIType 渠道类型 -> APIType，第二个返回值表示是否受支持
 func ChannelType2APIType(channelType int) (int, bool) {
 	switch channelType {
-	case ChannelTypeOpenAI:
+	case ChannelTypeOpenAI, ChannelTypeCustom:
 		return APITypeOpenAI, true
 	case ChannelTypeAli:
 		return APITypeAli, true

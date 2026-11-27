@@ -4,6 +4,7 @@ package constant
 const (
 	ChannelTypeUnknown     = 0
 	ChannelTypeOpenAI      = 1
+	ChannelTypeCustom      = 8 // 自定义渠道（OpenAI 兼容协议，使用渠道自定义 BaseURL）
 	ChannelTypeAnthropic   = 14
 	ChannelTypeZhipu       = 16
 	ChannelTypeAli         = 17
@@ -19,13 +20,13 @@ const (
 	ChannelTypeSora        = 55 // 仅用于视频任务
 
 	// 以下渠道类型仅 distributor 引用，用于按渠道设置上下文；
-	// 具体上游对接尚未移植，数值保留待定（勿与已有值冲突）。
+	// 数值与 new-api 保持严格一致，避免与持久化的数据库 type 字段冲突。
 	ChannelTypeAzure    = 3
-	ChannelTypeVertexAi = 8
-	ChannelTypeXunfei   = 9
-	ChannelCloudflare   = 11
-	ChannelTypeMokaAI   = 12
-	ChannelTypeCoze     = 13
+	ChannelTypeXunfei   = 18
+	ChannelCloudflare   = 39
+	ChannelTypeVertexAi = 41
+	ChannelTypeMokaAI   = 44
+	ChannelTypeCoze     = 49
 )
 
 var ChannelBaseURLs = map[int]string{
@@ -48,6 +49,7 @@ var ChannelBaseURLs = map[int]string{
 var ChannelTypeNames = map[int]string{
 	ChannelTypeUnknown:     "Unknown",
 	ChannelTypeOpenAI:      "OpenAI",
+	ChannelTypeCustom:      "Custom",
 	ChannelTypeAnthropic:   "Anthropic",
 	ChannelTypeZhipu:       "Zhipu",
 	ChannelTypeAli:         "Ali",

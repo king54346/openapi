@@ -8,6 +8,7 @@ import (
 
 	"encoding/base64"
 	"net/http"
+	"openapi/common"
 	"openapi/constant"
 	httpclient "openapi/service/http"
 )
@@ -15,6 +16,9 @@ import (
 // GetImageFromUrl 下载图片，返回 MIME 类型和 base64 编码的数据
 
 func GetImageFromUrl(url string) (mimeType string, data string, err error) {
+	if err := common.ValidateOutboundURL(url); err != nil {
+		return "", "", fmt.Errorf("request rejected by SSRF protection: %w", err)
+	}
 	resp, err := httpclient.GetHttpClient().Get(url)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to download image: %w", err)

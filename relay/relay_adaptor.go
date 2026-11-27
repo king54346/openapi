@@ -78,7 +78,7 @@ func GetTaskAdaptor(platform constant.TaskPlatform) channel.TaskAdaptor {
 		return &taskali.TaskAdaptor{}
 	case constant.ChannelTypeDoubaoVideo, constant.ChannelTypeVolcEngine:
 		return &taskdoubao.TaskAdaptor{}
-	case constant.ChannelTypeSora, constant.ChannelTypeOpenAI:
+	case constant.ChannelTypeSora, constant.ChannelTypeOpenAI, constant.ChannelTypeCustom:
 		return &tasksora.TaskAdaptor{}
 	case constant.ChannelTypeMiniMax:
 		return &hailuo.TaskAdaptor{}

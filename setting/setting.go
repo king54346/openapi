@@ -3,6 +3,7 @@ package setting
 import (
 	"fmt"
 	"openapi/common"
+	"openapi/common/system"
 	"slices"
 	"strconv"
 	"strings"
@@ -199,6 +200,142 @@ func ApplyOptions(values map[string]string) []error {
 	set("PassThroughRequestEnabled", func(v string) error {
 		return applyBool(v, &globalSettings.PassThroughRequestEnabled)
 	})
+
+	// ---------- 磁盘缓存设置（performance_setting.disk_cache_*） ----------
+	diskCfg := system.GetDiskCacheConfig()
+	diskChanged := false
+	set("performance_setting.disk_cache_enabled", func(v string) error {
+		diskChanged = true
+		return applyBool(v, &diskCfg.Enabled)
+	})
+	set("performance_setting.disk_cache_threshold_mb", func(v string) error {
+		diskChanged = true
+		return applyInt(v, &diskCfg.ThresholdMB)
+	})
+	set("performance_setting.disk_cache_max_size_mb", func(v string) error {
+		diskChanged = true
+		return applyInt(v, &diskCfg.MaxSizeMB)
+	})
+	set("performance_setting.disk_cache_path", func(v string) error {
+		diskChanged = true
+		diskCfg.Path = strings.TrimSpace(v)
+		return nil
+	})
+	if diskChanged {
+		if diskCfg.ThresholdMB <= 0 {
+			diskCfg.ThresholdMB = 10
+		}
+		if diskCfg.MaxSizeMB <= 0 {
+			diskCfg.MaxSizeMB = 1024
+		}
+		system.SetDiskCacheConfig(diskCfg)
+	}
+
+	// ---------- 系统性能监控（performance_setting.monitor_*） ----------
+	monCfg := common.GetPerformanceMonitorConfig()
+	monChanged := false
+	set("performance_setting.monitor_enabled", func(v string) error {
+		monChanged = true
+		return applyBool(v, &monCfg.Enabled)
+	})
+	set("performance_setting.monitor_cpu_threshold", func(v string) error {
+		monChanged = true
+		return applyInt(v, &monCfg.CPUThreshold)
+	})
+	set("performance_setting.monitor_memory_threshold", func(v string) error {
+		monChanged = true
+		return applyInt(v, &monCfg.MemoryThreshold)
+	})
+	set("performance_setting.monitor_disk_threshold", func(v string) error {
+		monChanged = true
+		return applyInt(v, &monCfg.DiskThreshold)
+	})
+	if monChanged {
+		common.SetPerformanceMonitorConfig(monCfg)
+		if monCfg.Enabled {
+			system.RefreshSystemStatus()
+		}
+	}
+
+	// ---------- 准入控制与平滑背压（performance_setting.admission_*） ----------
+	admCfg := system.GetAdmissionConfig()
+	admChanged := false
+	set("performance_setting.admission_enabled", func(v string) error {
+		admChanged = true
+		return applyBool(v, &admCfg.Enabled)
+	})
+	set("performance_setting.admission_soft_limit", func(v string) error {
+		admChanged = true
+		return applyInt(v, &admCfg.SoftLimit)
+	})
+	set("performance_setting.admission_hard_limit", func(v string) error {
+		admChanged = true
+		return applyInt(v, &admCfg.HardLimit)
+	})
+	set("performance_setting.admission_max_queue_size", func(v string) error {
+		admChanged = true
+		return applyInt(v, &admCfg.MaxQueueSize)
+	})
+	set("performance_setting.admission_max_wait_ms", func(v string) error {
+		admChanged = true
+		return applyInt(v, &admCfg.MaxWaitMs)
+	})
+	set("performance_setting.admission_priority_whitelist", func(v string) error {
+		admChanged = true
+		admCfg.PriorityWhitelist = strings.TrimSpace(v)
+		return nil
+	})
+	if admChanged {
+		system.SetAdmissionConfig(admCfg)
+	}
+
+	// ---------- SSRF 防护设置（fetch_setting.*） ----------
+	ssrfCfg := common.GetSSRFConfig()
+	ssrfChanged := false
+	set("fetch_setting.enable_ssrf_protection", func(v string) error {
+		ssrfChanged = true
+		return applyBool(v, &ssrfCfg.Enabled)
+	})
+	set("fetch_setting.allow_private_ip", func(v string) error {
+		ssrfChanged = true
+		return applyBool(v, &ssrfCfg.AllowPrivateIp)
+	})
+	set("fetch_setting.apply_ip_filter_for_domain", func(v string) error {
+		ssrfChanged = true
+		return applyBool(v, &ssrfCfg.ApplyIPFilterForDomain)
+	})
+	set("fetch_setting.domain_filter_mode", func(v string) error {
+		ssrfChanged = true
+		return applyBool(v, &ssrfCfg.DomainFilterMode)
+	})
+	set("fetch_setting.ip_filter_mode", func(v string) error {
+		ssrfChanged = true
+		return applyBool(v, &ssrfCfg.IpFilterMode)
+	})
+	set("fetch_setting.domain_list", func(v string) error {
+		ssrfChanged = true
+		return applyStringSlice(v, &ssrfCfg.DomainList)
+	})
+	set("fetch_setting.ip_list", func(v string) error {
+		ssrfChanged = true
+		return applyStringSlice(v, &ssrfCfg.IpList)
+	})
+	set("fetch_setting.allowed_ports", func(v string) error {
+		ssrfChanged = true
+		return applyStringSlice(v, &ssrfCfg.AllowedPorts)
+	})
+	if ssrfChanged {
+		if ssrfCfg.DomainList == nil {
+			ssrfCfg.DomainList = []string{}
+		}
+		if ssrfCfg.IpList == nil {
+			ssrfCfg.IpList = []string{}
+		}
+		if ssrfCfg.AllowedPorts == nil {
+			ssrfCfg.AllowedPorts = []string{}
+		}
+		common.SetSSRFConfig(ssrfCfg)
+	}
 
 	return errs
 }

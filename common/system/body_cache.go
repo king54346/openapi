@@ -6,6 +6,8 @@ import (
 	"openapi/common"
 )
 
+//
+
 // bodyDiskCache 把磁盘缓存的配置、容量与统计提供给 common 的请求体存储使用。
 type bodyDiskCache struct{}
 

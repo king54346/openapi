@@ -22,9 +22,14 @@ var (
 	proxyClients    = make(map[string]*http.Client)
 )
 
-func checkRedirect(_ *http.Request, via []*http.Request) error {
+func checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return fmt.Errorf("stopped after 10 redirects")
+	}
+	if req != nil && req.URL != nil {
+		if err := common.ValidateOutboundURL(req.URL.String()); err != nil {
+			return fmt.Errorf("redirect blocked by SSRF protection: %w", err)
+		}
 	}
 	return nil
 }
