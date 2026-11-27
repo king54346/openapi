@@ -6,8 +6,7 @@ import (
 	"openapi/common"
 )
 
-//
-
+// 通过 BodyStorage 落盘后，只在第 1 次从网卡流式写进临时文件，后续第 2~N 次全部通过 SectionReader 按需从磁盘读取
 // bodyDiskCache 把磁盘缓存的配置、容量与统计提供给 common 的请求体存储使用。
 type bodyDiskCache struct{}
 
