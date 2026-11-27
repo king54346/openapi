@@ -1,7 +1,6 @@
 package main
 
 import (
-	httpclient "openapi/service/http"
 	"context"
 	"crypto/rand"
 	"embed"
@@ -10,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	httpclient "openapi/service/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,7 +29,6 @@ import (
 	"github.com/joho/godotenv"
 	gin "github.com/king54346/gin-tiny"
 	"github.com/king54346/gin-tiny/middleware/sessions"
-	"github.com/king54346/gin-tiny/middleware/sessions/cookie"
 	"gorm.io/gorm"
 )
 
@@ -49,6 +48,7 @@ func main() {
 	}
 	defer database.Close(db)
 	defer database.Close(logDB)
+	defer common.StopClusterEventBus()
 
 	common.SysLog("OpenAPI " + common.Version + " started")
 	if os.Getenv("GIN_MODE") != "debug" {
@@ -56,9 +56,6 @@ func main() {
 	}
 	if common.DebugEnabled {
 		common.SysLog("running in debug mode")
-	}
-	if !common.IsMasterNode {
-		common.SysLog("running as slave node: migrations, task polling and cron are disabled by default")
 	}
 
 	if common.GetEnvOrDefaultBool("ENABLE_PPROF", false) {
@@ -137,6 +134,14 @@ func InitResources() (*gorm.DB, *gorm.DB, error) {
 
 	httpclient.InitHttpClient()
 
+	// Redis 优先初始化：连接成功后启用集群模式（Session、Pub/Sub 缓存同步、跨节点亲和性、分布式锁与限流）；未配置则降级单机内存
+	if err := common.InitRedisClient(); err != nil {
+		common.SysError("failed to init redis: " + err.Error() + ", falling back to local memory mode")
+	}
+	if common.RedisEnabled {
+		common.StartClusterEventBus(context.Background())
+	}
+
 	// 请求体磁盘缓存：读取配置，并清理上次异常退出残留的缓存文件
 	system.LoadDiskCacheConfigFromEnv()
 	if err := system.CleanupOldDiskCacheFiles(5 * time.Minute); err != nil {
@@ -149,6 +154,7 @@ func InitResources() (*gorm.DB, *gorm.DB, error) {
 		return nil, nil, err
 	}
 	fail := func(err error) (*gorm.DB, *gorm.DB, error) {
+		common.StopClusterEventBus()
 		database.Close(mainDB)
 		database.Close(logsDB)
 		return nil, nil, err
@@ -157,31 +163,26 @@ func InitResources() (*gorm.DB, *gorm.DB, error) {
 		return fail(fmt.Errorf("migrate database: %w", err))
 	}
 
-	// 系统配置：options 表的键值同步到运行时配置（公告、分组、Turnstile、亲和性开关等）
+	// 系统配置：options 表的键值同步到运行时配置（公告、Turnstile、亲和性开关等）
 	if err := model.LoadOptionsFromDB(); err != nil {
 		return fail(fmt.Errorf("load options: %w", err))
 	}
 
-	// 渠道缓存：启动时加载，之后每 SYNC_FREQUENCY 秒从数据库重建
+	// 渠道缓存：启动时加载，启用 Redis 时通过 Pub/Sub 实时同步变更并以定时同步兜底
 	if err := model.InitChannelCache(); err != nil {
 		return fail(fmt.Errorf("load channel cache: %w", err))
 	}
 	go model.SyncChannelCache(common.SyncFrequency)
 
-	// 异步任务（视频等）后台轮询；UPDATE_TASK 默认只在 master 节点开启
+	// 异步任务（视频等）后台轮询；多实例启用 Redis 时通过分布式锁自动防重
 	tasksvc.StartTaskPolling()
 
-	// 通用定时任务（如 channel_test 定时测试渠道）；CRON_ENABLED 默认只在 master 节点开启
+	// 通用定时任务（如 channel_test 定时测试渠道）；多实例启用 Redis 时通过分布式锁自动防重
 	cronsvc.RegisterCronExecutors()
-	if common.GetEnvOrDefaultBool("CRON_ENABLED", common.IsMasterNode) {
+	if common.GetEnvOrDefaultBool("CRON_ENABLED", true) {
 		cronsvc.StartScheduler()
 	} else {
-		common.SysLog("cron scheduler disabled (CRON_ENABLED=false or slave node)")
-	}
-
-	// Redis：REDIS_CONN_STRING 或 REDIS_ADDR 都未配置时保持禁用，走内存限流
-	if err := common.InitRedisClient(); err != nil {
-		common.SysError("failed to init redis: " + err.Error() + ", falling back to in-memory rate limiter")
+		common.SysLog("cron scheduler disabled (CRON_ENABLED=false)")
 	}
 
 	// 启动系统监控（供 SystemPerformanceCheck 中间件使用）
@@ -190,21 +191,18 @@ func InitResources() (*gorm.DB, *gorm.DB, error) {
 	return mainDB, logsDB, nil
 }
 
-// newSessionStore 创建 cookie session 存储。未设置 SESSION_SECRET 时使用随机密钥，
-// 重启后已登录的 session 全部失效，多实例部署时必须显式配置同一个密钥。
+// newSessionStore 创建会话存储：启用 Redis 时使用服务端可控的 RedisSessionStore（支持踢下线），否则回退 CookieStore。
 func newSessionStore() sessions.Store {
 	secret := os.Getenv("SESSION_SECRET")
 	if secret == "" {
 		secret = rand.Text() + rand.Text()
 		common.SysLog("SESSION_SECRET not set, using a random secret; sessions will not survive restarts")
 	}
-	store := cookie.NewStore([]byte(secret))
-	store.Options(sessions.Options{
+	return middleware.NewSessionStore([]byte(secret), sessions.Options{
 		Path:     "/",
 		MaxAge:   2592000, // 30 天
 		HttpOnly: true,
 		Secure:   false,
 		SameSite: http.SameSiteStrictMode,
 	})
-	return store
 }

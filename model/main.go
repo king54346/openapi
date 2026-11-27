@@ -1,8 +1,10 @@
 package model
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"openapi/common"
 
@@ -43,9 +45,10 @@ func InitDB(db *gorm.DB, logDB *gorm.DB) error {
 	_, logUsingPostgreSQL := dialectOf(logDB)
 	logGroupCol = quoteCol("group", logUsingPostgreSQL)
 
-	// 多实例部署时只由 master 节点迁移表结构
-	if !common.IsMasterNode {
-		return nil
+	// 多实例同时启动且配置了 Redis 时，通过分布式锁串行化表结构迁移，避免并发 DDL 锁表冲突
+	releaseMigrateLock, acquired := common.AcquireLockWait(context.Background(), "db:migrate", 60*time.Second, 60*time.Second)
+	if acquired {
+		defer releaseMigrateLock()
 	}
 	if err := DB.AutoMigrate(&Channel{}, &Task{}, &CronJob{}, &CronJobRun{}); err != nil {
 		return err

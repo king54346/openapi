@@ -1,14 +1,29 @@
 package channel
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"openapi/common"
 	"openapi/model"
 	"openapi/types"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
+
+/**
+渠道健康检查与自动禁用机制：
+1. 记录渠道连续失败次数（内存 + Redis），超过阈值自动禁用,集群级连续失败自动封禁。
+2. fatalChannelErrorMarkers：出现即说明渠道密钥或账户不可用，立即禁用。
+3. isChannelFault：判断错误是否由渠道（上游）导致。
+4. isFatalChannelError：判断是否为密钥失效、欠费等不会自行恢复的错误。
+5. RecordChannelSuccess：转发成功后清零渠道的连续失败计数（启用 Redis 时同步清零集群计数）。
+6. RecordChannelFailure：记录一次渠道失败，必要时自动禁用并通知全集群下线该渠道。
+*/
+
+const healthFailureKeyTTL = 15 * time.Minute
 
 var channelFailures = struct {
 	sync.Mutex
@@ -16,7 +31,6 @@ var channelFailures = struct {
 }{counts: make(map[int]int)}
 
 // fatalChannelErrorMarkers 出现即说明渠道密钥或账户不可用，立即禁用
-
 var fatalChannelErrorMarkers = []string{
 	"invalid_api_key",
 	"incorrect api key",
@@ -30,14 +44,16 @@ var fatalChannelErrorMarkers = []string{
 	"accountoverdue", // 火山引擎欠费
 }
 
-// isChannelFault 错误是否由渠道（上游）导致。
+func channelFailureRedisKey(channelID int) string {
+	return common.RedisKey("health", "fail", strconv.Itoa(channelID))
+}
 
+// isChannelFault 错误是否由渠道（上游）导致。
 func isChannelFault(apiErr *types.StarAPIError) bool {
 	if types.IsChannelError(apiErr) {
 		return true
 	}
 	if types.IsSkipRetryError(apiErr) {
-		// 本地请求处理错误（参数校验、格式转换等）
 		return false
 	}
 	code := apiErr.StatusCode
@@ -46,7 +62,6 @@ func isChannelFault(apiErr *types.StarAPIError) bool {
 }
 
 // isFatalChannelError 是否为密钥失效、欠费等不会自行恢复的错误。
-
 func isFatalChannelError(apiErr *types.StarAPIError) bool {
 	if apiErr.StatusCode == http.StatusUnauthorized {
 		return true
@@ -60,17 +75,43 @@ func isFatalChannelError(apiErr *types.StarAPIError) bool {
 	return false
 }
 
-// RecordChannelSuccess 转发成功后清零渠道的连续失败计数。
-
+// RecordChannelSuccess 转发成功后清零渠道的连续失败计数（启用 Redis 时同步清零集群计数）。
 func RecordChannelSuccess(channelID int) {
+	if channelID <= 0 {
+		return
+	}
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = common.RDB.Del(ctx, channelFailureRedisKey(channelID)).Err()
+	}
 	channelFailures.Lock()
 	delete(channelFailures.counts, channelID)
 	channelFailures.Unlock()
 }
 
-// RecordChannelFailure 记录一次渠道失败，必要时自动禁用，返回本次是否禁用了渠道（或多 key 渠道中的某个 key）。
-// usingKey 为本次使用的 key，多 key 渠道只禁用该 key。
+func incrementChannelFailure(channelID int) int {
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		key := channelFailureRedisKey(channelID)
+		pipe := common.RDB.Pipeline()
+		incrCmd := pipe.Incr(ctx, key)
+		pipe.Expire(ctx, key, healthFailureKeyTTL)
+		if _, err := pipe.Exec(ctx); err == nil {
+			return int(incrCmd.Val())
+		} else {
+			common.SysError("redis channel failure incr failed, falling back to memory: " + err.Error())
+		}
+	}
+	channelFailures.Lock()
+	channelFailures.counts[channelID]++
+	count := channelFailures.counts[channelID]
+	channelFailures.Unlock()
+	return count
+}
 
+// RecordChannelFailure 记录一次渠道失败，必要时自动禁用并通知全集群下线该渠道。
 func RecordChannelFailure(channelID int, usingKey string, autoBan bool, apiErr *types.StarAPIError) bool {
 	if !common.ChannelAutoDisableEnabled || !autoBan || apiErr == nil || channelID <= 0 {
 		return false
@@ -79,11 +120,7 @@ func RecordChannelFailure(channelID int, usingKey string, autoBan bool, apiErr *
 		return false
 	}
 	fatal := isFatalChannelError(apiErr)
-
-	channelFailures.Lock()
-	channelFailures.counts[channelID]++
-	count := channelFailures.counts[channelID]
-	channelFailures.Unlock()
+	count := incrementChannelFailure(channelID)
 
 	threshold := max(common.ChannelAutoDisableThreshold, 1)
 	if !fatal && count < threshold {

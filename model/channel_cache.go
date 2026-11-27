@@ -28,8 +28,23 @@ var (
 
 var errChannelCacheNotReady = errors.New("channel cache is not initialized")
 
+func init() {
+	common.RegisterClusterEventHandler(common.EventTopicChannelRefresh, func(string) {
+		if DB == nil {
+			return
+		}
+		if err := reloadChannelCache(true); err != nil {
+			common.SysError("failed to reload channel cache on cluster event: " + err.Error())
+		}
+	})
+}
+
 // InitChannelCache 从数据库加载渠道并重建缓存。
 func InitChannelCache() error {
+	return reloadChannelCache(false)
+}
+
+func reloadChannelCache(quietIfUnchanged bool) error {
 	var channels []*Channel
 	if err := DB.Where("status = ?", common.ChannelStatusEnabled).Find(&channels).Error; err != nil {
 		return err
@@ -59,24 +74,35 @@ func InitChannelCache() error {
 	}
 
 	channelCacheMu.Lock()
+	prevCount := -1
+	if channelsCache != nil {
+		prevCount = len(channelsCache.byID)
+	}
 	channelsCache = cache
 	channelCacheMu.Unlock()
 
-	if len(skipped) > 0 {
-		common.SysLog("channels skipped (no relay implementation for type): " + strings.Join(skipped, ", "))
+	newCount := len(cache.byID)
+	if !quietIfUnchanged || prevCount != newCount || common.DebugEnabled {
+		if len(skipped) > 0 {
+			common.SysLog("channels skipped (no relay implementation for type): " + strings.Join(skipped, ", "))
+		}
+		common.SysLog(fmt.Sprintf("channel cache loaded: %d enabled channels", newCount))
 	}
-	common.SysLog(fmt.Sprintf("channel cache loaded: %d enabled channels", len(cache.byID)))
 	return nil
 }
 
-// SyncChannelCache 每 frequency 秒重建一次渠道缓存（阻塞，需在 goroutine 中运行）。
+// SyncChannelCache 定期从数据库兜底重建渠道缓存（启用 Redis Pub/Sub 时自动拉长兜底周期并静默无变化的轮询日志）。
 func SyncChannelCache(frequency int) {
 	if frequency <= 0 {
 		frequency = 60
 	}
 	for {
-		time.Sleep(time.Duration(frequency) * time.Second)
-		if err := InitChannelCache(); err != nil {
+		interval := frequency
+		if common.RedisEnabled && interval < 300 {
+			interval = 300
+		}
+		time.Sleep(time.Duration(interval) * time.Second)
+		if err := reloadChannelCache(true); err != nil {
 			common.SysError("failed to sync channel cache: " + err.Error())
 		}
 	}
@@ -155,11 +181,13 @@ func GetRandomSatisfiedChannel(group, modelName string, retry int) (*Channel, er
 	return tier[len(tier)-1], nil
 }
 
-// RefreshChannelCache 渠道被修改后立即重建缓存，失败只记日志（下个同步周期会再试）。
+// RefreshChannelCache 渠道被修改后立即重建本机缓存并通过 Redis Pub/Sub 通知集群其他节点同步刷新。
 func RefreshChannelCache() {
-	if err := InitChannelCache(); err != nil {
+	if err := reloadChannelCache(false); err != nil {
 		common.SysError("failed to refresh channel cache: " + err.Error())
+		return
 	}
+	common.PublishClusterEvent(common.EventTopicChannelRefresh, "")
 }
 
 // GetEnabledModels 返回所有已启用渠道提供的模型名（去重、已排序）。

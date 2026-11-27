@@ -271,11 +271,22 @@ func GetModelTagsByModelName(modelName string) []string {
 	return parsed
 }
 
-// InvalidateModelTagsCache 清空模型标签缓存（模型元数据变更后调用）。
-func InvalidateModelTagsCache() {
+func init() {
+	common.RegisterClusterEventHandler(common.EventTopicModelTagsInvalidate, func(string) {
+		invalidateModelTagsLocal()
+	})
+}
+
+func invalidateModelTagsLocal() {
 	modelTagsCache.mu.Lock()
 	modelTagsCache.entries = map[string]modelTagsEntry{}
 	modelTagsCache.mu.Unlock()
+}
+
+// InvalidateModelTagsCache 清空模型标签缓存（模型元数据变更后调用，并通知集群其他节点清空）。
+func InvalidateModelTagsCache() {
+	invalidateModelTagsLocal()
+	common.PublishClusterEvent(common.EventTopicModelTagsInvalidate, "")
 }
 
 // EnrichModels 从渠道缓存填充附加信息：提供该模型的渠道、可用分组；

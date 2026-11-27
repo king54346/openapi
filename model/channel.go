@@ -2,13 +2,16 @@ package model
 
 import (
 	"bytes"
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"openapi/common"
 	"openapi/constant"
@@ -157,9 +160,21 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.StarAPIError) {
 		// Randomly pick one enabled key
 		selectedIdx := enabledIdx[rand.Intn(len(enabledIdx))]
 		return keys[selectedIdx], selectedIdx, nil
+	//	轮询模式： 一个渠道里允许用换行填入多个上游 API Key（例如塞 20 个免费/低并发额度 Key 到同一个渠道里），并开启 轮询模式
+	//  推进一个轮询下标写入和读取数据库，如果用了redis后: 1.数据库减少读写 2.全集群严格按顺序均匀轮询
 	case constant.MultiKeyModePolling:
-		// Use channel-specific lock to ensure thread-safe polling
+		// 启用 Redis 时使用全局原子 INCR 游标在已启用 key 上均匀轮询，免去每次请求写库的开销并跨节点共享游标
+		if common.RedisEnabled && common.RDB != nil && channel.Id > 0 {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			seq, err := common.RDB.Incr(ctx, common.RedisKey("channel", "polling", strconv.Itoa(channel.Id))).Result()
+			cancel()
+			if err == nil && seq > 0 {
+				selectedIdx := enabledIdx[int((seq-1)%int64(len(enabledIdx)))]
+				return keys[selectedIdx], selectedIdx, nil
+			}
+		}
 
+		// 单机无 Redis 降级：使用进程内互斥锁与本地游标
 		defer func() {
 			if common.DebugEnabled {
 				println(fmt.Sprintf("channel %d polling index: %d", channel.Id, channel.ChannelInfo.MultiKeyPollingIndex))
@@ -171,7 +186,7 @@ func (channel *Channel) GetNextEnabledKey() (string, int, *types.StarAPIError) {
 		if start < 0 || start >= len(keys) {
 			start = 0
 		}
-		for i := 0; i < len(keys); i++ {
+		for i := range keys {
 			idx := (start + i) % len(keys)
 			if getStatus(idx) == common.ChannelStatusEnabled {
 				// update polling index for next call (point to the next position)
@@ -198,9 +213,8 @@ func (channel *Channel) GetModels() []string {
 	return strings.Split(strings.Trim(channel.Models, ","), ",")
 }
 
-
-func (channel *Channel) GetOtherInfo() map[string]interface{} {
-	otherInfo := make(map[string]interface{})
+func (channel *Channel) GetOtherInfo() map[string]any {
+	otherInfo := make(map[string]any)
 	if channel.OtherInfo != "" {
 		err := common.Unmarshal([]byte(channel.OtherInfo), &otherInfo)
 		if err != nil {
@@ -210,7 +224,7 @@ func (channel *Channel) GetOtherInfo() map[string]interface{} {
 	return otherInfo
 }
 
-func (channel *Channel) SetOtherInfo(otherInfo map[string]interface{}) {
+func (channel *Channel) SetOtherInfo(otherInfo map[string]any) {
 	otherInfoBytes, err := common.Marshal(otherInfo)
 	if err != nil {
 		common.SysLog(fmt.Sprintf("failed to marshal other info: channel_id=%d, tag=%s, name=%s, error=%v", channel.Id, channel.GetTag(), channel.Name, err))

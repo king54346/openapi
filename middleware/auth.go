@@ -232,8 +232,8 @@ func TokenAuth() gin.HandlerFunc {
 			}
 		}
 		if strings.HasPrefix(c.Request().URL.Path, "/v1beta/models") ||
-			strings.HasPrefix(c.Request().URL.Path, "/v1beta/openai/models") ||
-			strings.HasPrefix(c.Request().URL.Path, "/v1/models/") {
+			strings.HasPrefix(c.Request().URL.Path, "/v1beta/openai") ||
+			strings.HasPrefix(c.Request().URL.Path, "/v1/models") {
 			if skKey := c.Query("key"); skKey != "" {
 				c.Request().Header.Set("Authorization", "Bearer "+skKey)
 			}

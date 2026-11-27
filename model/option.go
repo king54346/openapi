@@ -29,9 +29,24 @@ var (
 	optionMap   = map[string]string{}
 )
 
+func init() {
+	common.RegisterClusterEventHandler(common.EventTopicOptionRefresh, func(string) {
+		if DB == nil {
+			return
+		}
+		if err := loadOptionsFromDB(true); err != nil {
+			common.SysError("failed to reload options on cluster event: " + err.Error())
+		}
+	})
+}
+
 // LoadOptionsFromDB 读取 options 表到内存，并把已知配置同步到 setting 包。
 // 表不存在（旧库）时视为无配置，保持默认值。
 func LoadOptionsFromDB() error {
+	return loadOptionsFromDB(false)
+}
+
+func loadOptionsFromDB(quiet bool) error {
 	if DB == nil || !DB.Migrator().HasTable(&Option{}) {
 		return nil
 	}
@@ -51,7 +66,9 @@ func LoadOptionsFromDB() error {
 	for _, err := range setting.ApplyOptions(values) {
 		common.SysError("failed to apply option: " + err.Error())
 	}
-	common.SysLog("options loaded: " + strconv.Itoa(len(values)))
+	if !quiet || common.DebugEnabled {
+		common.SysLog("options loaded: " + strconv.Itoa(len(values)))
+	}
 	return nil
 }
 
@@ -105,6 +122,7 @@ func UpdateOptionValue(key, value string) error {
 	for _, err := range setting.ApplyOptions(map[string]string{key: value}) {
 		common.SysError("failed to apply option: " + err.Error())
 	}
+	common.PublishClusterEvent(common.EventTopicOptionRefresh, key)
 	return nil
 }
 
@@ -123,6 +141,7 @@ func DeleteOptionValue(key string) error {
 	optionMapMu.Lock()
 	delete(optionMap, key)
 	optionMapMu.Unlock()
+	common.PublishClusterEvent(common.EventTopicOptionRefresh, key)
 	return nil
 }
 

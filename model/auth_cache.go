@@ -1,6 +1,7 @@
 package model
 
 import (
+	"strconv"
 	"sync"
 	"time"
 
@@ -73,22 +74,47 @@ func authCacheTTL() time.Duration {
 }
 
 var (
-	tokenCache = newTTLCache[string, Token]() // key -> token
-	userCache  = newTTLCache[int, User]()     // id -> user
+	tokenCache = newTTLCache[string, Token]() // tokenKey -> token
+	userCache  = newTTLCache[int, User]()     // userId -> User
 )
 
-// InvalidateTokenCache 令牌被修改或删除后调用。
+func init() {
+	common.RegisterClusterEventHandler(common.EventTopicTokenInvalidate, func(key string) {
+		if key == "*" {
+			tokenCache.clear()
+			return
+		}
+		if key != "" {
+			tokenCache.delete(key)
+		}
+	})
+	common.RegisterClusterEventHandler(common.EventTopicUserInvalidate, func(key string) {
+		if key == "*" {
+			userCache.clear()
+			return
+		}
+		if id, err := strconv.Atoi(key); err == nil && id > 0 {
+			userCache.delete(id)
+		}
+	})
+}
+
+// InvalidateTokenCache 令牌被修改或删除后调用（同步清理本机 L1 缓存并向集群其他节点广播失效）。
 func InvalidateTokenCache(key string) {
 	tokenCache.delete(key)
+	common.PublishClusterEvent(common.EventTopicTokenInvalidate, key)
 }
 
-// InvalidateUserCache 用户被修改或删除后调用。
+// InvalidateUserCache 用户被修改或删除后调用（同步清理本机 L1 缓存并向集群其他节点广播失效）。
 func InvalidateUserCache(userId int) {
 	userCache.delete(userId)
+	common.PublishClusterEvent(common.EventTopicUserInvalidate, strconv.Itoa(userId))
 }
 
-// ClearAuthCache 清空令牌与用户缓存。
+// ClearAuthCache 清空令牌与用户缓存（含集群广播）。
 func ClearAuthCache() {
 	tokenCache.clear()
 	userCache.clear()
+	common.PublishClusterEvent(common.EventTopicTokenInvalidate, "*")
+	common.PublishClusterEvent(common.EventTopicUserInvalidate, "*")
 }

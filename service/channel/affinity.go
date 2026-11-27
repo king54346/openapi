@@ -1,6 +1,8 @@
 package channel
 
 import (
+	"context"
+	"errors"
 	"openapi/common"
 	"openapi/constant"
 	"openapi/setting"
@@ -11,7 +13,17 @@ import (
 	"time"
 
 	gin "github.com/king54346/gin-tiny"
+	"github.com/redis/go-redis/v9"
 )
+
+/**
+  亲和性缓存机制(命中统计与各渠道命中计数统一写入 Redis，多实例负载均衡下同一对话稳定命中同一上游渠道（支持前缀缓存复用），异常或未启用时无缝降级本地内存)
+	 1. 提取会话指纹： 用户ID | 模型名 | 会话标识 拼出唯一 Key 若客户端没传会话 ID，则按 用户ID | 模型名 聚合。
+	 2. 启用 Redis 时，亲和性缓存跨节点共享 节点选渠道前先去 Redis GET openapi:affinity:entry:<会话指纹> 拿到渠道；异常时自动回退本地缓存。
+	 3. 亲和性缓存可用于同一用户在同一会话中连续请求时，优先使用上次成功的渠道，减少渠道切换，提高响应速度。
+	 4. 亲和性缓存支持统计命中率、使用次数等指标，便于监控和优化。
+
+*/
 
 var affinitySessionHeaders = []string{
 	"X-Session-Id",
@@ -21,10 +33,7 @@ var affinitySessionHeaders = []string{
 }
 
 // affinitySessionQueries 会话标识候选查询参数。
-
 var affinitySessionQueries = []string{"session_id", "conversation_id", "prompt_cache_key"}
-
-// defaultAffinityTTL / defaultAffinityMaxEntries 兜底值，配置非法时使用。
 
 const (
 	defaultAffinityTTL        = 5 * time.Minute
@@ -37,7 +46,6 @@ type affinityEntry struct {
 }
 
 // AffinityStats 亲和性缓存统计。
-
 type AffinityStats struct {
 	Enabled    bool    `json:"enabled"`
 	Entries    int     `json:"entries"`
@@ -50,7 +58,6 @@ type AffinityStats struct {
 }
 
 // AffinityUsageStat 单个渠道的亲和性使用次数。
-
 type AffinityUsageStat struct {
 	ChannelID int    `json:"channel_id"`
 	Count     uint64 `json:"count"`
@@ -65,13 +72,9 @@ var affinityCache = struct {
 	records uint64
 }{entries: map[string]affinityEntry{}, usage: map[int]uint64{}}
 
-// affinityEnabled 亲和性是否开启。
-
 func affinityEnabled() bool {
 	return setting.GetGlobalSettings().ChannelAffinityEnabled
 }
-
-// affinityTTL 亲和记录有效期。
 
 func affinityTTL() time.Duration {
 	seconds := setting.GetGlobalSettings().ChannelAffinityTTLSeconds
@@ -81,8 +84,6 @@ func affinityTTL() time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-// affinityMaxEntries 缓存条目上限。
-
 func affinityMaxEntries() int {
 	maxEntries := setting.GetGlobalSettings().ChannelAffinityMaxEntries
 	if maxEntries <= 0 {
@@ -91,8 +92,19 @@ func affinityMaxEntries() int {
 	return maxEntries
 }
 
-// buildAffinityKey 生成亲和 key：用户 + 模型 + 会话标识（会话标识缺失时退化为前两者）。
+func affinityEntryRedisKey(key string) string {
+	return common.RedisKey("affinity", "entry", key)
+}
 
+func affinityStatsRedisKey() string {
+	return common.RedisKey("affinity", "stats")
+}
+
+func affinityUsageRedisKey() string {
+	return common.RedisKey("affinity", "usage")
+}
+
+// buildAffinityKey 生成亲和 key：用户 + 模型 + 会话标识（会话标识缺失时退化为前两者）。
 func buildAffinityKey(c gin.Context, modelName string) string {
 	userID := 0
 	if c != nil {
@@ -118,15 +130,31 @@ func buildAffinityKey(c gin.Context, modelName string) string {
 	return key
 }
 
-// GetPreferredChannelByAffinity 查询会话上次命中的渠道；未开启、无记录或已过期时返回 false。
-
+// GetPreferredChannelByAffinity 查询会话上次命中的渠道；启用 Redis 时跨节点共享，异常时自动回退本地缓存。
 func GetPreferredChannelByAffinity(c gin.Context, modelName string) (int, bool) {
 	if !affinityEnabled() || modelName == "" {
 		return 0, false
 	}
 	key := buildAffinityKey(c, modelName)
-	now := time.Now()
 
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		val, err := common.RDB.Get(ctx, affinityEntryRedisKey(key)).Result()
+		if err == nil {
+			if channelID, convErr := strconv.Atoi(val); convErr == nil && channelID > 0 {
+				_ = common.RDB.HIncrBy(ctx, affinityStatsRedisKey(), "hits", 1).Err()
+				return channelID, true
+			}
+		} else if errors.Is(err, redis.Nil) {
+			_ = common.RDB.HIncrBy(ctx, affinityStatsRedisKey(), "misses", 1).Err()
+			return 0, false
+		} else {
+			common.SysError("redis affinity get failed, falling back to memory: " + err.Error())
+		}
+	}
+
+	now := time.Now()
 	affinityCache.mu.Lock()
 	defer affinityCache.mu.Unlock()
 	entry, ok := affinityCache.entries[key]
@@ -141,13 +169,11 @@ func GetPreferredChannelByAffinity(c gin.Context, modelName string) (int, bool) 
 	return entry.channelID, true
 }
 
-// RecordChannelAffinity 记录本次成功请求使用的渠道，供后续同会话请求复用。
-
+// RecordChannelAffinity 记录本次成功请求使用的渠道，供后续同会话请求跨节点复用。
 func RecordChannelAffinity(c gin.Context, channelID int) {
 	if !affinityEnabled() || channelID <= 0 {
 		return
 	}
-	// 亲和 key 需要模型名：取分发阶段写入上下文的原始模型名
 	modelName := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
 	if modelName == "" {
 		return
@@ -156,21 +182,39 @@ func RecordChannelAffinity(c gin.Context, channelID int) {
 }
 
 // MarkChannelAffinityUsed 记一次亲和性命中（渠道来自 GetPreferredChannelByAffinity）。
-
 func MarkChannelAffinityUsed(c gin.Context, channelID int) {
 	if !affinityEnabled() || channelID <= 0 {
 		return
+	}
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := common.RDB.HIncrBy(ctx, affinityUsageRedisKey(), strconv.Itoa(channelID), 1).Err(); err == nil {
+			return
+		}
 	}
 	affinityCache.mu.Lock()
 	defer affinityCache.mu.Unlock()
 	affinityCache.usage[channelID]++
 }
 
-// storeAffinity 写入亲和记录，必要时先清理过期项，并在超出容量时淘汰最早过期的条目。
-
 func storeAffinity(key string, channelID int) {
-	now := time.Now()
 	ttl := affinityTTL()
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		pipe := common.RDB.Pipeline()
+		pipe.Set(ctx, affinityEntryRedisKey(key), strconv.Itoa(channelID), ttl)
+		pipe.HIncrBy(ctx, affinityStatsRedisKey(), "records", 1)
+		pipe.HIncrBy(ctx, affinityUsageRedisKey(), strconv.Itoa(channelID), 1)
+		if _, err := pipe.Exec(ctx); err == nil {
+			return
+		} else {
+			common.SysError("redis affinity store failed, falling back to memory: " + err.Error())
+		}
+	}
+
+	now := time.Now()
 	maxEntries := affinityMaxEntries()
 
 	affinityCache.mu.Lock()
@@ -196,8 +240,6 @@ func storeAffinity(key string, channelID int) {
 	affinityCache.entries[key] = affinityEntry{channelID: channelID, expireAt: now.Add(ttl)}
 }
 
-// purgeExpiredAffinityLocked 删除已过期条目，调用方需持有写锁。
-
 func purgeExpiredAffinityLocked(now time.Time) {
 	for key, entry := range affinityCache.entries {
 		if now.After(entry.expireAt) {
@@ -206,9 +248,35 @@ func purgeExpiredAffinityLocked(now time.Time) {
 	}
 }
 
-// GetAffinityCacheStats 亲和性缓存统计（条目数、命中率等）。
-
+// GetAffinityCacheStats 亲和性缓存统计（启用 Redis 时汇总集群全局统计）。
 func GetAffinityCacheStats() AffinityStats {
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
+		rawStats, err := common.RDB.HGetAll(ctx, affinityStatsRedisKey()).Result()
+		if err == nil {
+			hits, _ := strconv.ParseUint(rawStats["hits"], 10, 64)
+			misses, _ := strconv.ParseUint(rawStats["misses"], 10, 64)
+			records, _ := strconv.ParseUint(rawStats["records"], 10, 64)
+			entries := countRedisAffinityEntries(ctx)
+			total := hits + misses
+			stats := AffinityStats{
+				Enabled:    affinityEnabled(),
+				Entries:    entries,
+				MaxEntries: affinityMaxEntries(),
+				TTLSeconds: int(affinityTTL().Seconds()),
+				Hits:       hits,
+				Misses:     misses,
+				Records:    records,
+			}
+			if total > 0 {
+				stats.HitRate = float64(hits) / float64(total)
+			}
+			return stats
+		}
+	}
+
 	affinityCache.mu.Lock()
 	defer affinityCache.mu.Unlock()
 	purgeExpiredAffinityLocked(time.Now())
@@ -229,9 +297,44 @@ func GetAffinityCacheStats() AffinityStats {
 	return stats
 }
 
-// GetAffinityUsageStats 各渠道的亲和性使用次数（按次数降序）。
+func countRedisAffinityEntries(ctx context.Context) int {
+	pattern := common.RedisKey("affinity", "entry", "*")
+	var cursor uint64
+	count := 0
+	for {
+		keys, nextCursor, err := common.RDB.Scan(ctx, cursor, pattern, 200).Result()
+		if err != nil {
+			break
+		}
+		count += len(keys)
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+	return count
+}
 
+// GetAffinityUsageStats 各渠道的亲和性使用次数（按次数降序）。
 func GetAffinityUsageStats() []AffinityUsageStat {
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		rawUsage, err := common.RDB.HGetAll(ctx, affinityUsageRedisKey()).Result()
+		if err == nil {
+			stats := make([]AffinityUsageStat, 0, len(rawUsage))
+			for chStr, cntStr := range rawUsage {
+				chID, err1 := strconv.Atoi(chStr)
+				cnt, err2 := strconv.ParseUint(cntStr, 10, 64)
+				if err1 == nil && err2 == nil && cnt > 0 {
+					stats = append(stats, AffinityUsageStat{ChannelID: chID, Count: cnt})
+				}
+			}
+			sortAffinityUsageStats(stats)
+			return stats
+		}
+	}
+
 	affinityCache.mu.Lock()
 	defer affinityCache.mu.Unlock()
 
@@ -239,25 +342,45 @@ func GetAffinityUsageStats() []AffinityUsageStat {
 	for channelID, count := range affinityCache.usage {
 		stats = append(stats, AffinityUsageStat{ChannelID: channelID, Count: count})
 	}
+	sortAffinityUsageStats(stats)
+	return stats
+}
+
+func sortAffinityUsageStats(stats []AffinityUsageStat) {
 	sort.Slice(stats, func(i, j int) bool {
 		if stats[i].Count != stats[j].Count {
 			return stats[i].Count > stats[j].Count
 		}
 		return stats[i].ChannelID < stats[j].ChannelID
 	})
-	return stats
 }
 
-// ClearAffinityCache 清空亲和性缓存与统计。
-
+// ClearAffinityCache 清空亲和性缓存与统计（同时清理 Redis 与本地缓存）。
 func ClearAffinityCache() {
+	if common.RedisEnabled && common.RDB != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		pattern := common.RedisKey("affinity", "entry", "*")
+		var cursor uint64
+		for {
+			keys, nextCursor, err := common.RDB.Scan(ctx, cursor, pattern, 200).Result()
+			if err != nil {
+				break
+			}
+			if len(keys) > 0 {
+				_ = common.RDB.Del(ctx, keys...).Err()
+			}
+			cursor = nextCursor
+			if cursor == 0 {
+				break
+			}
+		}
+		_ = common.RDB.Del(ctx, affinityStatsRedisKey(), affinityUsageRedisKey()).Err()
+	}
+
 	affinityCache.mu.Lock()
 	defer affinityCache.mu.Unlock()
 	affinityCache.entries = map[string]affinityEntry{}
 	affinityCache.usage = map[int]uint64{}
 	affinityCache.hits, affinityCache.misses, affinityCache.records = 0, 0, 0
 }
-
-// 渠道健康：按渠道统计连续失败次数，达到阈值或遇到致命错误（密钥失效、欠费等）时
-// 自动禁用渠道（状态改为 ChannelStatusAutoDisabled，需管理员手动启用）。
-// 只统计渠道侧问题，请求本身有误（400 等）不计数；渠道关闭 auto_ban 时不处理。

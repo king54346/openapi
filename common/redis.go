@@ -78,6 +78,7 @@ func InitRedis(addr, password string, db int) error {
 		Addr:         addr,
 		Password:     password,
 		DB:           db,
+		PoolSize:     GetEnvOrDefault("REDIS_POOL_SIZE", 10),
 		DialTimeout:  3 * time.Second,
 		ReadTimeout:  3 * time.Second,
 		WriteTimeout: 3 * time.Second,

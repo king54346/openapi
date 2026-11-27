@@ -16,8 +16,8 @@ import (
 const taskPollInterval = 15 * time.Second
 
 func StartTaskPolling() {
-	if !common.GetEnvOrDefaultBool("UPDATE_TASK", common.IsMasterNode) {
-		common.SysLog("task polling disabled (UPDATE_TASK=false or slave node)")
+	if !common.GetEnvOrDefaultBool("UPDATE_TASK", true) {
+		common.SysLog("task polling disabled (UPDATE_TASK=false)")
 		return
 	}
 	go UpdateTaskBulk()
@@ -27,6 +27,10 @@ func StartTaskPolling() {
 func UpdateTaskBulk() {
 	for {
 		time.Sleep(taskPollInterval)
+		// 启用 Redis 时通过周期租约锁保证同一轮询窗口全集群只有一个实例拉取上游任务状态
+		if _, ok := common.AcquireLock(context.Background(), "task:poll_cycle", taskPollInterval-time.Second); !ok {
+			continue
+		}
 		UpdateUnfinishedTasks(context.Background())
 	}
 }

@@ -111,6 +111,9 @@ func UpdateUser(actorID, actorRole int, in UpdateUserInput) (*model.User, error)
 		}
 		return nil, err
 	}
+	if in.Password != "" {
+		common.RevokeUserSessions(target.Id)
+	}
 	return model.GetUserById(target.Id)
 }
 
@@ -119,7 +122,11 @@ func DeleteUser(actorID, actorRole, targetID int) error {
 	if err != nil {
 		return err
 	}
-	return model.DeleteUserById(target.Id)
+	if err := model.DeleteUserById(target.Id); err != nil {
+		return err
+	}
+	common.RevokeUserSessions(target.Id)
+	return nil
 }
 
 func ManageUser(actorID, actorRole, targetID int, action string) (deleted bool, updated *model.User, err error) {
@@ -137,6 +144,7 @@ func ManageUser(actorID, actorRole, targetID int, action string) (deleted bool, 
 		if err := model.DeleteUserById(target.Id); err != nil {
 			return false, nil, err
 		}
+		common.RevokeUserSessions(target.Id)
 		return true, nil, nil
 	case "promote":
 		if actorRole != common.RoleRootUser {
@@ -156,6 +164,9 @@ func ManageUser(actorID, actorRole, targetID int, action string) (deleted bool, 
 	}
 	if err := model.UpdateUserFields(target.Id, fields, ""); err != nil {
 		return false, nil, err
+	}
+	if action == "disable" || action == "promote" || action == "demote" {
+		common.RevokeUserSessions(target.Id)
 	}
 	u, err := model.GetUserById(target.Id)
 	return false, u, err
