@@ -33,7 +33,7 @@ var RelayMaxIdleConns int
 var RelayMaxIdleConnsPerHost int
 
 const (
-	RequestIdKey = "X-Oneapi-Request-Id"
+	RequestIdKey = "X-OpenApi-Request-Id"
 )
 
 const (
